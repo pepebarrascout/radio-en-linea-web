@@ -1,0 +1,18 @@
+# ── Configuración privada (tokens) ──
+api/config.php
+
+# ── Datos en tiempo de ejecución (se crean solos) ──
+api/data/*
+!api/data/.htaccess
+api/covers/*
+!api/covers/.htaccess
+api/history.json
+api/cron-update.log
+
+# ── Programación real del servidor (usar programacion.json.example) ──
+programacion.json
+
+# ── Sistema ──
+.DS_Store
+Thumbs.db
+*.log

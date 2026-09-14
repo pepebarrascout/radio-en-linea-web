@@ -1,0 +1,26 @@
+# Portadas en caché — Que Chilero Radio
+# Imágenes .jpg descargadas de Jellyfin (150px) mientras la
+# canción sonaba. Son PÚBLICAS: la web las muestra en el
+# historial. Solo se permite lectura.
+
+<IfModule mod_authz_core.c>
+    <Files "*.tmp">
+        Require all denied
+    </Files>
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    <Files "*.tmp">
+        Order allow,deny
+        Deny from all
+    </Files>
+</IfModule>
+
+Options -Indexes
+
+# Las portadas apenas cambian (una por canción): deja cachear 1 día
+<IfModule mod_headers.c>
+    <FilesMatch "\.(jpg|jpeg|png|webp)$">
+        Header set Cache-Control "public, max-age=86400"
+    </FilesMatch>
+</IfModule>

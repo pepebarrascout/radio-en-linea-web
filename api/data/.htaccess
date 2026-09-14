@@ -1,0 +1,15 @@
+# Directorio privado de datos — Que Chilero Radio
+# Aquí viven votes.json y voters.json (identificadores anónimos
+# de los votantes). No debe haber acceso web directo: los datos
+# públicos se exponen SOLO vía api/vote.php y api/votes.php.
+
+# Apache 2.4+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+# Fallback Apache 2.2
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>

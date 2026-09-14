@@ -1,0 +1,280 @@
+@import "tailwindcss";
+
+/* ── Fuentes escaneadas por Tailwind ─────────────────────────
+   El diseño completo vive en index.php y assets/js/app.js */
+@source "../index.php";
+@source "../assets/js/app.js";
+
+/* ═══════════════════════════════════════════════════════════
+   CSS personalizado — Que Chilero Radio
+   (idéntico al original + clases semánticas de tema claro/oscuro
+   que sustituyen los condicionales isDark del React antiguo;
+   valores de color en oklch = paleta exacta de Tailwind v4)
+   ═══════════════════════════════════════════════════════════ */
+
+:root {
+  --color-primary: #000080;
+  --color-gray: #dededf;
+  --color-bg-light: #ffffff;
+  --color-bg-dark: #0a0a1a;
+  --color-text-light: #1a1a1a;
+  --color-text-dark: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #444;
+}
+
+/* Audio player custom styles */
+audio::-webkit-media-controls-panel {
+  background: linear-gradient(135deg, #000080, #0000b3);
+}
+
+/* Pulse animation for live indicator */
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+.animate-pulse-live {
+  animation: pulse-live 1.5s ease-in-out infinite;
+}
+
+/* Smooth transitions */
+.theme-transition {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Tab active indicator */
+.tab-active {
+  position: relative;
+}
+
+.tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #000080;
+  border-radius: 3px 3px 0 0;
+}
+
+.dark .tab-active::after {
+  background: #4466ff;
+}
+
+/* Vinyl spin animation */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+.animate-spin-slow.paused {
+  animation-play-state: paused;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #000080, #4466ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.dark .gradient-text {
+  background: linear-gradient(135deg, #6688ff, #ffffff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Ocultar barra de scroll de las pestañas de días ────── */
+.scrollbar-hide {
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Mapeo semántico claro/oscuro (equivalente exacto de los
+   condicionales isDark que tenía la versión React)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Contenedor raíz: text-gray-900 / text-white */
+.app-root { color: oklch(0.21 0.034 264.665); }
+.dark .app-root { color: #ffffff; }
+
+/* Header: bg-white/90 border-gray-200 / bg-[#0a0a1a]/90 border-white/10 */
+.app-header { background-color: rgba(255, 255, 255, 0.9); }
+.dark .app-header { background-color: rgba(10, 10, 26, 0.9); }
+
+/* Logo circular con degradado de marca */
+.logo-circle { background-image: linear-gradient(to bottom right, #000080, #0000b3); }
+.dark .logo-circle { background-image: linear-gradient(to bottom right, #4466ff, #000080); }
+
+/* Título de marca: text-[#000080] / text-white */
+.text-brand { color: #000080; }
+.dark .text-brand { color: #ffffff; }
+
+/* Etiqueta destacada: text-[#000080] / text-[#6688ff] */
+.text-brand-accent { color: #000080; }
+.dark .text-brand-accent { color: #6688ff; }
+
+/* Texto secundario: text-gray-600 / text-gray-300 */
+.text-muted { color: oklch(0.446 0.03 256.802); }
+.dark .text-muted { color: oklch(0.872 0.01 258.338); }
+
+/* Texto terciario: text-gray-500 / text-gray-400 */
+.text-subtle { color: oklch(0.551 0.027 264.364); }
+.dark .text-subtle { color: oklch(0.707 0.022 261.325); }
+
+/* Texto suave: text-gray-400 / text-gray-500 */
+.text-faint { color: oklch(0.707 0.022 261.325); }
+.dark .text-faint { color: oklch(0.551 0.027 264.364); }
+
+/* Botón de tema */
+.theme-toggle { background-color: oklch(0.967 0.003 264.542); color: #000080; }
+.theme-toggle:hover { background-color: oklch(0.928 0.006 264.531); }
+.dark .theme-toggle { background-color: rgba(255, 255, 255, 0.1); color: oklch(0.905 0.182 98.111); }
+.dark .theme-toggle:hover { background-color: rgba(255, 255, 255, 0.2); }
+
+/* Tarjeta del reproductor */
+.player-card {
+  background-image: linear-gradient(to bottom right, rgba(222, 222, 223, 0.5), #ffffff);
+  border-color: oklch(0.928 0.006 264.531);
+}
+.dark .player-card {
+  background-image: linear-gradient(to bottom right, rgba(0, 0, 128, 0.4), #0a0a1a);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Spinner de carga */
+.spinner { border-color: #000080; border-top-color: transparent; }
+.dark .spinner { border-color: #ffffff; border-top-color: transparent; }
+
+/* Píldoras del reproductor: bg-gray-200 text-gray-600 / bg-white/10 text-gray-300 */
+.pill { background-color: oklch(0.928 0.006 264.531); color: oklch(0.446 0.03 256.802); }
+.dark .pill { background-color: rgba(255, 255, 255, 0.1); color: oklch(0.872 0.01 258.338); }
+
+/* Píldoras pequeñas del listado: bg-gray-100 text-gray-500 / bg-white/10 text-gray-300 */
+.pill-soft { background-color: oklch(0.967 0.003 264.542); color: oklch(0.551 0.027 264.364); }
+.dark .pill-soft { background-color: rgba(255, 255, 255, 0.1); color: oklch(0.872 0.01 258.338); }
+
+/* Tarjetas de listado: bg-white border-gray-200 / bg-[#0d0d2a] border-white/10 */
+.list-card { background-color: #ffffff; border-color: oklch(0.928 0.006 264.531); }
+.dark .list-card { background-color: #0d0d2a; border-color: rgba(255, 255, 255, 0.1); }
+
+/* Filas con hover */
+.row:hover { background-color: oklch(0.985 0.002 247.839); }
+.dark .row:hover { background-color: rgba(255, 255, 255, 0.05); }
+
+/* Botones de día */
+.tab-btn { background-color: oklch(0.967 0.003 264.542); color: oklch(0.446 0.03 256.802); }
+.tab-btn:hover { background-color: oklch(0.928 0.006 264.531); color: oklch(0.21 0.034 264.665); }
+.dark .tab-btn { background-color: rgba(255, 255, 255, 0.05); color: oklch(0.707 0.022 261.325); }
+.dark .tab-btn:hover { background-color: rgba(255, 255, 255, 0.1); color: #ffffff; }
+.tab-btn.tab-selected {
+  background-color: #000080;
+  color: #ffffff;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 128, 0.2), 0 4px 6px -4px rgba(0, 0, 128, 0.2);
+}
+.dark .tab-btn.tab-selected {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 128, 0.3), 0 4px 6px -4px rgba(0, 0, 128, 0.3);
+}
+
+/* Programa activo en la programación */
+.program-active { border-left-color: #000080; background-color: rgba(222, 222, 223, 0.6); }
+.dark .program-active { border-left-color: #4466ff; background-color: rgba(0, 0, 128, 0.3); }
+
+/* Sección del estudio */
+.studio-section { background-color: rgba(222, 222, 223, 0.3); }
+.dark .studio-section { background-color: #0d0d2a; }
+
+.studio-overlay { background-image: linear-gradient(to top, #ffffff, rgba(255, 255, 255, 0.6), transparent); }
+.dark .studio-overlay { background-image: linear-gradient(to top, #0a0a1a, rgba(10, 10, 26, 0.6), transparent); }
+
+/* Footer */
+.app-footer { border-color: oklch(0.928 0.006 264.531); background-color: oklch(0.985 0.002 247.839); }
+.dark .app-footer { border-color: rgba(255, 255, 255, 0.1); background-color: #0a0a1a; }
+
+.social-link { color: oklch(0.551 0.027 264.364); }
+.social-link:hover { color: #000080; }
+.dark .social-link { color: oklch(0.707 0.022 261.325); }
+.dark .social-link:hover { color: #ffffff; }
+
+/* Botón de play */
+.play-btn { background-image: linear-gradient(to bottom right, #000080, #0000b3); }
+.play-btn:hover { background-image: linear-gradient(to bottom right, #0000b3, #0000e6); }
+.play-btn.playing { background-image: linear-gradient(to bottom right, oklch(0.637 0.237 25.331), oklch(0.505 0.213 27.518)); }
+.play-btn.playing:hover { background-image: linear-gradient(to bottom right, oklch(0.577 0.245 27.325), oklch(0.444 0.177 26.899)); }
+
+/* ── Votos: me gusta / no me gusta ──────────────────────── */
+.vote-btn {
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 0;
+  font-family: inherit;
+  line-height: 1;
+}
+
+.vote-btn-inactive { background-color: oklch(0.967 0.003 264.542); color: oklch(0.551 0.027 264.364); }
+.vote-btn-inactive:hover { background-color: oklch(0.928 0.006 264.531); }
+.dark .vote-btn-inactive { background-color: rgba(255, 255, 255, 0.1); color: oklch(0.872 0.01 258.338); }
+.dark .vote-btn-inactive:hover { background-color: rgba(255, 255, 255, 0.2); }
+
+.vote-btn-like {
+  background-color: #000080;
+  color: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 128, 0.3);
+}
+.vote-btn-like:hover { background-color: #0000b3; }
+
+.vote-btn-dislike {
+  background-color: oklch(0.637 0.237 25.331);
+  color: #ffffff;
+  box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);
+}
+.vote-btn-dislike:hover { background-color: oklch(0.577 0.245 27.325); }
+
+/* Portada en miniatura del listado (placeholder mientras carga) */
+.cover-thumb {
+  background-image: linear-gradient(to bottom right, #000080, #0000b3);
+}

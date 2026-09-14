@@ -1,0 +1,67 @@
+# Configuración para la API — Que Chilero Radio
+
+# CORS para el endpoint del historial
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type"
+</IfModule>
+
+# Manejar preflight OPTIONS
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_METHOD} OPTIONS
+    RewriteRule ^(.*)$ - [R=200,L]
+</IfModule>
+
+# Evitar listado de directorios
+Options -Indexes
+
+# ── Proteger los archivos de datos ───────────────────────────
+# history.json / votes.json / voters.json / logs solo deben
+# leerse o escribirse a través de sus endpoints PHP (así el
+# navegador nunca ve una escritura a medias ni los IDs de
+# los votantes). Las portadas en covers/ SÍ son públicas.
+
+# Apache 2.4+
+<IfModule mod_authz_core.c>
+    <Files "history.json">
+        Require all denied
+    </Files>
+    <Files "cron-update.log">
+        Require all denied
+    </Files>
+    <Files "votes.json">
+        Require all denied
+    </Files>
+    <Files "voters.json">
+        Require all denied
+    </Files>
+    <Files "*.tmp">
+        Require all denied
+    </Files>
+</IfModule>
+
+# Fallback Apache 2.2 (por si el hosting es muy antiguo)
+<IfModule !mod_authz_core.c>
+    <Files "history.json">
+        Order allow,deny
+        Deny from all
+    </Files>
+    <Files "cron-update.log">
+        Order allow,deny
+        Deny from all
+    </Files>
+    <Files "votes.json">
+        Order allow,deny
+        Deny from all
+    </Files>
+    <Files "voters.json">
+        Order allow,deny
+        Deny from all
+    </Files>
+    <Files "*.tmp">
+        Order allow,deny
+        Deny from all
+    </Files>
+</IfModule>
