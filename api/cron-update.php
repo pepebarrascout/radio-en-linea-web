@@ -49,19 +49,11 @@ if (is_file(__DIR__ . '/config.php')) {
     require_once __DIR__ . '/config.php';
 }
 
-// Endpoint de metadatos del plugin Jellyfin RadioOnline.
-// Orden: variable de entorno → api/config.php → valor por defecto.
-define('NOW_PLAYING_URL', getenv('QCR_NOWPLAYING_URL')
-    ?: (defined('QCR_NOWPLAYING_URL_VALUE') ? QCR_NOWPLAYING_URL_VALUE : 'https://jellyfin.blogsdeguatemala.com/RadioOnline/NowPlaying'));
-
 // Clave para llamadas por HTTP (deja vacía = solo CLI).
 // Orden: variable de entorno → api/config.php → vacía.
 // Genera una aleatoria con: php -r "echo bin2hex(random_bytes(16));"
 define('CRON_SECRET_KEY', getenv('QCR_CRON_SECRET')
     ?: (defined('QCR_CRON_SECRET_VALUE') ? QCR_CRON_SECRET_VALUE : ''));
-
-// Timeout de la consulta al servidor Jellyfin (segundos)
-define('HTTP_TIMEOUT', 8);
 
 // ── Restricción de acceso ────────────────────────────────────
 
@@ -81,7 +73,15 @@ if (!$isCli) {
 // ── Carga de la librería compartida ──────────────────────────
 
 require_once __DIR__ . '/history-lib.php';
-require_once __DIR__ . '/covers-lib.php';
+require_once __DIR__ . '/covers-lib.php';   // incluye np-lib.php (URL configurada, nunca hardcodeada)
+
+// Endpoint de metadatos del plugin RadioOnline.
+// Orden: variable de entorno → api/config.php. ⭐ Sin valor por
+// defecto: el dominio del servidor NUNCA va escrito en el código.
+define('NOW_PLAYING_URL', qcrNowPlayingUrl());
+
+// Timeout de la consulta al servidor de la radio (segundos)
+define('HTTP_TIMEOUT', 8);
 
 // ── Parámetros CLI ───────────────────────────────────────────
 
@@ -96,6 +96,20 @@ if ($isCli) {
             $url = substr($arg, 6);   // solo para pruebas
         }
     }
+}
+
+// Sin URL configurada (ni por CLI de pruebas) no hay nada que
+// consultar: avisa con la instrucción exacta y termina en error.
+if ($url === '') {
+    $msg = 'Falta configurar la URL de NowPlaying: define QCR_NOWPLAYING_URL (entorno) '
+         . 'o QCR_NOWPLAYING_URL_VALUE en api/config.php (copia config.example.php).';
+    if ($isCli) {
+        fwrite(STDERR, "[ERROR] {$msg}\n");
+        exit(1);
+    }
+    http_response_code(503);
+    echo json_encode(['error' => 'nowplaying_no_configurado', 'mensaje' => $msg], JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 // ── Consulta del "Now Playing" ───────────────────────────────

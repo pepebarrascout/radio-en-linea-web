@@ -17,12 +17,16 @@
   'use strict';
 
   // ── Configuración ──────────────────────────────────────────
-  var NOW_PLAYING_URL = 'https://jellyfin.blogsdeguatemala.com/RadioOnline/NowPlaying';
+  // ⭐ Todo va por proxys del PROPIO servidor (mismo origen): el
+  // dominio del servidor de la radio nunca se escribe en el
+  // código del cliente. La URL real se define en el servidor
+  // (api/config.php → QCR_NOWPLAYING_URL_VALUE, ver README).
+  var NOW_PLAYING_URL = './api/nowplaying.php';
   var SCHEDULE_URL = './programacion.json';
   var RADIO_STREAM_URL = 'https://quechilero.com/radio';
   var HISTORY_API_URL = './api/history.php';
   var VOTES_API_URL = './api/vote.php';
-  var ARTWORK_FALLBACK_URL = 'https://jellyfin.blogsdeguatemala.com/RadioOnline/NowPlaying/Artwork';
+  var ARTWORK_FALLBACK_URL = './api/artwork.php';
   var PLACEHOLDER_TITLE = 'Esperando transmisión...';
 
   var DEFAULT_NOW_PLAYING = {
@@ -198,17 +202,13 @@
   function buildPlayerArtworkUrl(np, cacheKey) {
     var url = (np && np.artworkUrl ? String(np.artworkUrl) : '').trim();
     if (!url) url = ARTWORK_FALLBACK_URL;
-    url = url.replace(/^http:\/\//i, 'https://');
-    try {
-      var u = new URL(url);
-      u.searchParams.set('maxWidth', '720');
-      // ⭐ La URL del artwork de Jellyfin es SIEMPRE la misma (devuelve la
-      // portada de la canción actual): sin este cache-busting el navegador
-      // mostraría la portada de la canción anterior desde su caché.
-      u.searchParams.set('v', cacheKey || String(Date.now()));
-      url = u.href;
-    } catch (e) { /* URL relativa o inválida: se usa tal cual */ }
-    return url;
+    // ⭐ La URL del artwork es SIEMPRE la misma (el proxy devuelve la
+    // portada de la canción actual): sin este cache-busting el navegador
+    // mostraría la portada de la canción anterior desde su caché.
+    // Se añade por parámetros para funcionar igual con la ruta local
+    // (api/artwork.php) que con cualquier URL absoluta.
+    var joiner = url.indexOf('?') >= 0 ? '&' : '?';
+    return url + joiner + 'maxWidth=720&v=' + encodeURIComponent(cacheKey || String(Date.now()));
   }
 
   // ── Votos ──────────────────────────────────────────────────
@@ -340,14 +340,6 @@
   }
 
   // ── Historial ──────────────────────────────────────────────
-  /** ¿Es esta fila la canción que suena AHORA? */
-  function songMatchesNowPlaying(song) {
-    var np = state.nowPlaying;
-    if (!np || !np.title || np.title === PLACEHOLDER_TITLE || !np.artist) return false;
-    if (song.itemId && np.itemId) return song.itemId === np.itemId;
-    return song.title === np.title && song.artist === np.artist;
-  }
-
   /** ¿Es esta fila la canción que suena AHORA? */
   function songMatchesNowPlaying(song) {
     var np = state.nowPlaying;
@@ -633,13 +625,17 @@
 
       var rowClass = isActive ? 'program-active' : 'row';
       var titleClass = isActive ? 'font-semibold text-brand-accent' : 'font-semibold';
+      // Dos columnas: ícono | (título / horario / descripción en 3 líneas
+      // apiladas). Más legible en pantallas grandes y pequeñas.
       var timeClass = isActive
-        ? 'text-sm font-mono flex-shrink-0 text-right text-brand-accent font-semibold'
-        : 'text-sm font-mono flex-shrink-0 text-right text-faint';
+        ? 'text-sm font-mono mt-1 text-brand-accent font-semibold'
+        : 'text-sm font-mono mt-1 text-faint';
 
       return '' +
         '<div class="' + rowClass + ' flex items-start gap-4 p-4 md:p-5 transition-all duration-300 border-l-4 border-l-transparent">' +
+        // Columna 1: ícono del programa
         '<div class="text-2xl flex-shrink-0 mt-0.5">' + icon + '</div>' +
+        // Columna 2, línea 1: título (+ badge AHORA si está al aire)
         '<div class="flex-1 min-w-0">' +
         '<div class="flex items-center gap-2 flex-wrap">' +
         '<h4 class="' + titleClass + '">' + esc(item.programa) + '</h4>' +
@@ -648,9 +644,11 @@
             '<span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse-live"></span>AHORA</span>'
           : '') +
         '</div>' +
+        // Columna 2, línea 2: horario
+        '<p class="' + timeClass + '"><i class="fas fa-clock mr-1 text-xs"></i>' + esc(timeRange) + '</p>' +
+        // Columna 2, línea 3: descripción
         '<p class="text-sm mt-1 text-subtle">' + esc(descripcion) + '</p>' +
         '</div>' +
-        '<div class="' + timeClass + '"><i class="fas fa-clock mr-1 text-xs"></i>' + esc(timeRange) + '</div>' +
         '</div>';
     }).join('');
   }

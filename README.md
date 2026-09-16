@@ -27,6 +27,7 @@
 | 🗳️ **Votos de oyentes** | Like/dislike anónimo (cookie, 1 voto activo por canción, cambiable) |
 | 🔄 **Ciclo semanal de votos** | Jellyfin consume los totales 1 vez/semana con token; el contador vuelve a cero |
 | 🪪 **itemId de Jellyfin** | Cada voto viaja con el GUID del ítem para que el plugin consulte su base de datos |
+| 🛡️ **Sin dominios expuestos** | El navegador solo habla con tu hosting (proxys de NowPlaying y portadas); el dominio del servidor de la radio nunca aparece en el código ni en la red del cliente |
 | 🔒 **Privacidad** | Los conteos nunca son públicos; los votantes nunca se exponen |
 | 📲 **PWA instalable** | Manifest + service worker + banner de instalación con detección Android/iOS |
 | 🌗 **Tema claro/oscuro** | Persistente, aplicado antes de pintar (sin destellos) |
@@ -54,12 +55,12 @@
 
    ```bash
    cd ~/public_html/qc
-   wget https://github.com/pepebarrascout/radio-en-linea-web/releases/download/v0.1.0/radio-en-linea-web-v0.1.0.zip
-   unzip radio-en-linea-web-v0.1.0.zip && rm radio-en-linea-web-v0.1.0.zip
+   wget https://github.com/pepebarrascout/radio-en-linea-web/releases/download/v0.1.1/radio-en-linea-web-v0.1.1.zip
+   unzip radio-en-linea-web-v0.1.1.zip && rm radio-en-linea-web-v0.1.1.zip
    ```
 
-3. Crea la configuración privada del token (Paso 1 de [Configuración](#️-configuracion))
-4. Programa el cron cada 1 minuto (Paso 2)
+3. Crea la configuración privada (Pasos 1 y 2 de [Configuración](#️-configuracion))
+4. Programa el cron cada 1 minuto (Paso 3)
 5. Abre tu web y pulsa play 🎶
 
 > El ZIP trae ya la estructura completa (incluidas las carpetas `api/data/` y `api/covers/` con su `.htaccess` de protección). Los archivos de datos se crean solos la primera vez que se usa la web.
@@ -77,13 +78,27 @@ Después, los mismos pasos 3-5 del Método 1.
 
 ## ⚙️ Configuracion
 
-### Paso 1: Token secreto de consumo (obligatorio)
+### Paso 1: URL del servidor de la radio (obligatorio)
+
+El dominio de tu servidor (endpoint NowPlaying del plugin RadioOnline) **nunca va escrito en el código**: el navegador consulta los proxys del propio hosting (`api/nowplaying.php` y `api/artwork.php`) y solo el PHP del servidor conoce la URL real.
+
+```bash
+cd ~/public_html/qc/api
+cp config.example.php config.php
+nano config.php   # pega tu URL en QCR_NOWPLAYING_URL_VALUE
+```
+
+- Formato: `https://tu-servidor-de-radio/RadioOnline/NowPlaying`
+- Alternativa: variable de entorno `QCR_NOWPLAYING_URL`
+- Sin esta URL la web muestra "Esperando transmisión…" y el cron no registra canciones
+
+### Paso 2: Token secreto de consumo (obligatorio)
 
 Los votos se consumen desde Jellyfin **una vez a la semana** con un token secreto que **nunca va hardcodeado en el código**:
 
 ```bash
 cd ~/public_html/qc/api
-cp config.example.php config.php
+cp config.example.php config.php   # si ya lo creaste en el Paso 1, solo añade el token
 # Genera un token aleatorio y edítalo:
 php -r "echo bin2hex(random_bytes(24)) . PHP_EOL;"
 nano config.php   # pega el token en QCR_VOTES_TOKEN_VALUE
@@ -94,7 +109,7 @@ nano config.php   # pega el token en QCR_VOTES_TOKEN_VALUE
 - Para mirar los votos **sin consumirlos**: añade `&ver=1`
 - Alternativa sin `config.php`: define la variable de entorno `QCR_VOTES_TOKEN`
 
-### Paso 2: Cron del historial (obligatorio)
+### Paso 3: Cron del historial (obligatorio)
 
 En cPanel → **Cron Jobs** (o crontab):
 
@@ -104,14 +119,15 @@ En cPanel → **Cron Jobs** (o crontab):
 
 Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y baja sus portadas. Es idempotente: puede ejecutarse las veces que haga falta sin duplicados.
 
-### Paso 3: Programación y personalización
+### Paso 4: Programación y personalización
 
 | Archivo | Descripción |
 |---|---|
 | `programacion.json` | Crea una copia de `programacion.json.example` y edítala: programas por día con `dia`, `hora_inicio`, `hora_fin`, `programa`, `descripción` |
-| `index.php` | Colores, textos y el stream (`<audio src="https://tu-dominio.com/radio">`) |
-| `assets/js/app.js` | URLs de NowPlaying/stream/API en el bloque de configuración superior |
-| `api/config.php` | Token de consumo y (opcional) URL de tu Jellyfin y clave HTTP del cron |
+| `index.php` | Textos, estructura del header/footer/hero, fuentes (Google Fonts) y el stream (`<audio src="https://tu-dominio.com/radio">`) |
+| `assets/css/app.css` | Todos los estilos: paleta de colores (variables al inicio del archivo), tipografías, botones, tarjetas, tema claro/oscuro |
+| `assets/js/app.js` | Bloque de configuración al inicio (URLs locales, stream) + render dinámico: filas de programación (`renderSchedule`), íconos de programas (`getProgramIcon`), historial (`renderHistory`) |
+| `api/config.php` | URL del servidor de la radio, token de consumo y clave HTTP del cron |
 
 ---
 
@@ -147,7 +163,7 @@ Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y b
 
 ### Flujo de Operacion
 
-1. **Ahora suena**: el reproductor consulta el endpoint `NowPlaying` del plugin cada 10 s y pinta portada, metadatos y votos al instante.
+1. **Ahora suena**: el reproductor consulta `api/nowplaying.php` (proxy del propio hosting que oculta el servidor de la radio) cada 10 s y pinta portada, metadatos y votos al instante.
 2. **Historial 24/7**: el cron del servidor registra cada canción (con su `itemId`) y baja la portada a `api/covers/`. Si un visitante detecta el cambio antes, el navegador hace un respaldo idempotente que además dispara la descarga de la portada en ese mismo momento.
 3. **Votos**: cada oyente vota 👍/👎 una vez por canción (cookie anónima `qc_vid`, cambio y anulación permitidos). El voto se guarda con el `itemId` de Jellyfin.
 4. **Ciclo semanal**: el plugin llama `api/votes.php?token=...` 1 vez/semana → recibe todo lo acumulado ordenado por popularidad, se guarda respaldo y el contador vuelve a cero (todos pueden volver a votar).
@@ -160,6 +176,8 @@ Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y b
 |---|---|---|
 | `api/history.php` | GET | Historial público (últimas 10 canciones + portadas, sin campos internos) |
 | `api/history.php` | POST | Respaldo idempotente desde el navegador (incluye `artworkUrl` para bajar la portada al instante) |
+| `api/nowplaying.php` | GET | Proxy local de "Ahora suena" (caché breve de 5 s; nunca expone el dominio del upstream) |
+| `api/artwork.php` | GET | Proxy de portadas del reproductor (`maxWidth` 16–2048; solo imágenes validadas) |
 | `api/vote.php` | GET | Mis votos según cookie anónima (sin conteos: no son públicos) |
 | `api/vote.php` | POST | Emitir / cambiar / anular voto `{ artist, title, vote, itemId }` |
 | `api/votes.php?token=...` | GET | ⚠️ Privado: **consume** los votos (lista ordenada + respaldo + reset del ciclo) |
@@ -178,11 +196,15 @@ Carpetas protegidas con `.htaccess` (Apache 2.2/2.4): `api/data/` (votos, votant
 
 ### El historial no se actualiza
 - Verifica que el cron esté programado y apunte a `api/cron-update.php`
-- Prueba a mano por CLI: `php api/cron-update.php --verbose`
+- Prueba a mano por CLI: `php api/cron-update.php --verbose` (sin URL configurada termina en error con la instrucción exacta)
 - Comprueba que `api/history.json` y `api/covers/` tienen permiso de escritura (755/644)
 
+### La web queda en "Esperando transmisión…"
+- Falta `api/config.php` con la URL del servidor de la radio (Paso 1 de Configuración)
+- Comprueba el proxy: `curl https://tu-dominio.com/qc/api/nowplaying.php` → debe devolver el JSON con la canción en emisión
+
 ### El consumo de votos responde 503 `token_no_configurado`
-- Falta crear `api/config.php` a partir de `config.example.php` (Paso 1)
+- Falta definir `QCR_VOTES_TOKEN_VALUE` en `api/config.php` (Paso 2 de Configuración)
 
 ### La programación no se ve
 - `programacion.json` debe ser JSON válido; usa `programacion.json.example` como plantilla
@@ -202,6 +224,9 @@ Carpetas protegidas con `.htaccess` (Apache 2.2/2.4): `api/data/` (votos, votant
 | `sw.js` | Service worker (precache del shell, red-primero en APIs) |
 | `api/history.php` | API del historial (GET/POST idempotente) |
 | `api/history-lib.php` | Registro idempotente, deduplicación por duración, zona horaria |
+| `api/nowplaying.php` | Proxy JSON de "Ahora suena" (caché breve con `flock`, sin exponer el upstream) |
+| `api/artwork.php` | Proxy de portadas del reproductor (validación de imagen real) |
+| `api/np-lib.php` | Resolución de la URL del servidor de la radio (env/config) y descarga HTTP compartida |
 | `api/cron-update.php` | Actualizador automático 24/7 (cron) |
 | `api/covers-lib.php` | Caché de portadas (descarga, validación y recolector de basura) |
 | `api/vote.php` | Votos individuales anónimos (cookie `qc_vid`) |

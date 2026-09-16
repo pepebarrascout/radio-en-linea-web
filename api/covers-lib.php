@@ -20,6 +20,7 @@
  */
 
 require_once __DIR__ . '/history-lib.php';
+require_once __DIR__ . '/np-lib.php';   // URL real del artwork: QCR_NOWPLAYING_URL (env) o api/config.php
 
 // ── Configuración ────────────────────────────────────────────
 
@@ -27,11 +28,8 @@ require_once __DIR__ . '/history-lib.php';
 // QCR_COVERS_DIR permite redirigirla (p. ej. en pruebas).
 define('COVERS_DIR', getenv('QCR_COVERS_DIR') ?: __DIR__ . '/covers');
 
-// Resolución solicitada a Jellyfin al descargar (px de ancho)
+// Resolución solicitada al servidor de la radio al descargar (px de ancho)
 define('COVER_SIZE', 150);
-
-// Endpoint base de portada si NowPlaying no trae artworkUrl
-define('ARTWORK_FALLBACK_URL', 'https://jellyfin.blogsdeguatemala.com/RadioOnline/NowPlaying/Artwork');
 
 // Timeout de descarga de portada (segundos)
 define('COVER_HTTP_TIMEOUT', 10);
@@ -82,18 +80,23 @@ function coverUrlFor(string $artist, string $title): ?string
 /**
  * Construye la URL de descarga de portada redimensionada:
  *  - fuerza el esquema que ya traiga la URL (server-to-server)
- *  - fija/sobrescribe maxWidth=COVER_SIZE
+ *  - fija/sobrescribe maxWidth (por defecto COVER_SIZE, 150 px)
+ *  - sin URL válida usa el endpoint Artwork configurado
+ *    (QCR_NOWPLAYING_URL / config.php — nunca un dominio hardcodeado)
+ *  - devuelve '' si no hay configuración (no hay de dónde descargar)
  */
-function buildCoverDownloadUrl(?string $artworkUrl): string
+function buildCoverDownloadUrl(?string $artworkUrl, ?int $maxWidth = null): string
 {
+    $maxWidth = $maxWidth ?: COVER_SIZE;
     $url = trim((string)$artworkUrl);
     if ($url === '' || !filter_var($url, FILTER_VALIDATE_URL)) {
-        $url = ARTWORK_FALLBACK_URL;
+        $url = qcrArtworkUrl();   // ⭐ endpoint configurado, sin hardcodear
     }
 
     $parts = parse_url($url);
     if ($parts === false || empty($parts['host'])) {
-        return ARTWORK_FALLBACK_URL . '?maxWidth=' . COVER_SIZE;
+        $fallback = qcrArtworkUrl();
+        return $fallback === '' ? '' : $fallback . '?maxWidth=' . $maxWidth;
     }
 
     $scheme = $parts['scheme'] ?? 'https';
@@ -102,45 +105,21 @@ function buildCoverDownloadUrl(?string $artworkUrl): string
     $path   = $parts['path'] ?? '/';
 
     parse_str($parts['query'] ?? '', $query);
-    $query['maxWidth'] = (string)COVER_SIZE;
+    $query['maxWidth'] = (string)$maxWidth;
     $queryString = http_build_query($query);
 
     return "{$scheme}://{$host}{$port}{$path}?{$queryString}";
 }
 
 /**
- * Descarga una imagen por HTTP (cURL con fallback file_get_contents).
+ * Descarga una imagen por HTTP (cURL con fallback file_get_contents,
+ * implementación compartida en np-lib.php).
  * Devuelve los bytes o null en caso de error.
  */
 function fetchCoverBytes(string $url): ?string
 {
-    if (function_exists('curl_init')) {
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT        => COVER_HTTP_TIMEOUT,
-            CURLOPT_CONNECTTIMEOUT => COVER_HTTP_TIMEOUT,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_USERAGENT      => 'QueChileroRadio-Covers/1.0',
-        ]);
-        if (defined('CURLOPT_MAX_REDIRECTS')) {
-            curl_setopt($ch, CURLOPT_MAX_REDIRECTS, 3);
-        }
-        $body = curl_exec($ch);
-        curl_close($ch);
-        if ($body === false || $body === '') {
-            return null;
-        }
-        return $body;
-    }
-
-    $ctx  = stream_context_create([
-        'http' => ['timeout' => COVER_HTTP_TIMEOUT, 'user_agent' => 'QueChileroRadio-Covers/1.0'],
-        'ssl'  => ['verify_peer' => true],
-    ]);
-    $body = @file_get_contents($url, false, $ctx);
-    return $body === false ? null : $body;
+    [$body, , $err] = qcrHttpGet($url, COVER_HTTP_TIMEOUT, 'QueChileroRadio-Covers/1.0');
+    return $err === null ? $body : null;
 }
 
 /**
@@ -184,7 +163,11 @@ function ensureCoverCached(string $artist, string $title, ?string $artworkUrl): 
         return 'failed';
     }
 
-    $url   = buildCoverDownloadUrl($artworkUrl);
+    $url = buildCoverDownloadUrl($artworkUrl);
+    if ($url === '') {
+        return 'failed';   // sin URL configurada no hay descarga posible
+    }
+
     $bytes = fetchCoverBytes($url);
 
     if (!isValidImageBytes($bytes)) {

@@ -30,12 +30,22 @@
 define('QCR_VOTES_TOKEN_VALUE', 'PEGA_AQUI_UN_TOKEN_ALEATORIO_LARGO');
 
 /**
- * (Opcional) Endpoint de metadatos del plugin RadioOnline si tu
- * Jellyfin vive en otra URL. Por defecto el código usa:
- *     https://jellyfin.blogsdeguatemala.com/RadioOnline/NowPlaying
- * Alternativa: variable de entorno QCR_NOWPLAYING_URL.
+ * ⭐ URL del endpoint NowPlaying del plugin RadioOnline en tu
+ * servidor de la radio (OBLIGATORIA: sin ella la web muestra
+ * "Esperando transmisión…" y el cron no puede registrar canciones).
+ *
+ * Ejemplo de formato (usa TU dominio; NUNCA va hardcodeada en el
+ * código del repositorio, por eso se define aquí o en el entorno):
+ *     https://tu-servidor-de-radio/RadioOnline/NowPlaying
+ *
+ * De esta URL el servidor deriva también el endpoint de portadas
+ * (…/RadioOnline/NowPlaying/Artwork), que sirve el navegador vía
+ * api/artwork.php sin exponer tu dominio.
+ *
+ * Alternativa: variable de entorno QCR_NOWPLAYING_URL
+ * (tiene prioridad sobre este archivo).
  */
-// define('QCR_NOWPLAYING_URL_VALUE', 'https://tu-jellyfin/RadioOnline/NowPlaying');
+define('QCR_NOWPLAYING_URL_VALUE', 'PEGA_AQUI_LA_URL_DE_TU_SERVIDOR_DE_RADIO');
 
 /**
  * (Opcional) Clave para llamar al actualizador por HTTP

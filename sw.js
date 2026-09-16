@@ -9,7 +9,7 @@
 
 'use strict';
 
-var CACHE_NAME = 'qcr-static-v4';
+var CACHE_NAME = 'qcr-static-v5';
 
 var PRECACHE = [
   './',
@@ -64,8 +64,9 @@ self.addEventListener('fetch', function (event) {
   //    que se vea el cambio al recargar o a los pocos minutos)
   if (url.pathname.includes('programacion.json')) return;
 
-  // ⛔ Artwork de Jellyfin: siempre red (cambia con cada canción)
-  if (url.hostname.includes('jellyfin')) return;
+  // Nota: el NowPlaying y las portadas llegan vía api/* (proxys del
+  // propio hosting) y ya quedan excluidos por la regla de api/ de
+  // arriba: siempre red, nunca caché.
 
   // Navegación: red primero, caché de respaldo (offline)
   if (request.mode === 'navigate') {

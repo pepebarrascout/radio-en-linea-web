@@ -60,9 +60,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // respaldo principal 24/7.
     $coverStatus = null;
     if ($registered) {
-        $artworkUrl = (string)($input['artworkUrl'] ?? '');
-        // Solo http/https y URL válida (evita valores malformados)
-        if ($artworkUrl !== '' && preg_match('#^https?://#i', $artworkUrl) && filter_var($artworkUrl, FILTER_VALIDATE_URL)) {
+        // El navegador recibe el artwork a través del proxy local
+        // (api/artwork.php — el dominio real nunca viaja al cliente);
+        // aquí se traduce a la URL real configurada para poder bajarla.
+        $artworkUrl = qcrResolveArtworkUrl((string)($input['artworkUrl'] ?? ''));
+        if ($artworkUrl !== '') {
             try {
                 $coverStatus = ensureCoverCached(
                     trim((string)$input['artist']),

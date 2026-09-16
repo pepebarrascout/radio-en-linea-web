@@ -216,7 +216,7 @@ Fecha: 2026-09-15
 - Unitarias ciclo: 26 OK · HTTP ciclo: 23 OK · Integración: 50 OK · Unitarias votos/portadas: 28 OK.
 - Nuevas coberturas: itemId como clave, export con itemId, 403 sin token, ver=1 no consume, POST/GET sin conteos, myVotes mapeado por artista||título, historial expone itemId.
 - `node --check app.js` OK; sintaxis PHP de todos los endpoints OK.
-- TLS verificado en `https://jellyfin.blogsdeguatemala.com` (el artwork http:// se auto-mejora a https://).
+- TLS verificado contra el servidor real de la radio (entonces el cliente accedía directo; desde v0.1.1 el navegador ya no contacta con ese servidor: lo hacen los proxys del propio hosting).
 
 ---
 
@@ -254,3 +254,35 @@ Fecha: 2026-09-15
 - Unitarias ciclo: OK · HTTP ciclo: OK · Integración v2: OK · Unitarias votos/portadas: OK (suites adaptadas al token por entorno).
 - `node --check app.js` OK; sintaxis PHP de todos los endpoints OK.
 - Smoke: banner de instalación, Umami, iconos nuevos, miniatura instantánea y persistencia de voto validados en navegador.
+
+---
+
+# v0.1.1 — Programación legible, pie limpio y cero dominios en el código
+
+## 📐 Interfaz
+
+| Cambio | Detalle |
+|---|---|
+| Programación semanal a 2 columnas | Cada fila ahora es **ícono → (título / horario / descripción)** en tres líneas apiladas: mucho más legible en pantallas grandes y pequeñas. Se conservan tipografías, colores, borde de acento, resaltado del programa al aire y el badge AHORA |
+| Pie de página | Eliminada la frase "Todos los derechos reservados." (queda `© AÑO Que Chilero Radio.`) |
+
+## 🛡️ Privacidad: el dominio del servidor de la radio desaparece del código
+
+| Cambio | Detalle |
+|---|---|
+| `api/nowplaying.php` (NUEVO) | Proxy JSON de "Ahora suena": el navegador consulta el propio hosting (mismo origen, sin CORS). Caché de 5 s con `flock` (miles de oyentes no multiplican consultas), sirve la última respuesta válida si el upstream falla y **reescribe `artworkUrl` al proxy local** |
+| `api/artwork.php` (NUEVO) | Proxy de portadas del reproductor (`maxWidth` saneado 16–2048). Valida magic bytes JPEG/PNG/WebP antes de servir: una página de error del upstream nunca llega al `<img>` |
+| `api/np-lib.php` (NUEVO) | Punto único de resolución de la URL del servidor (env `QCR_NOWPLAYING_URL` → `api/config.php`). Descarga HTTP compartida (cURL + fallback) y "limpiador" que borra el host real de cualquier campo de texto de la respuesta |
+| `app.js` | `NOW_PLAYING_URL` y `ARTWORK_FALLBACK_URL` apuntan a los proxys locales; el dominio real ya no existe en el código del cliente. Cache-busting de portada compatible con rutas relativas. Duplicado de `songMatchesNowPlaying()` eliminado |
+| `covers-lib.php` | `ARTWORK_FALLBACK_URL` hardcodeado eliminado: usa el endpoint configurado. `buildCoverDownloadUrl()` admite `maxWidth` como parámetro (lo usa `artwork.php`); sin configuración devuelve `''` |
+| `cron-update.php` | Sin valor por defecto del dominio: si falta configuración termina en error con la instrucción exacta (CLI) o 503 JSON (HTTP). `--url=` sigue disponible para pruebas |
+| `history.php` | El `artworkUrl` relativa que envía el navegador (`api/artwork.php?...`) se traduce en el servidor a la URL real para bajar la portada al instante |
+| `config.example.php` | `QCR_NOWPLAYING_URL_VALUE` pasa a ser el Paso 1 (obligatorio) con placeholder genérico; sin dominios reales en el repositorio |
+| `sw.js` | Regla "hostname incluye jellyfin" eliminada (ya no hay tráfico directo); regla `/api/` cubre los proxys. `CACHE_NAME` → `qcr-static-v5` |
+| Degradación elegante | Sin URL configurada, `nowplaying.php` responde un placeholder "Esperando transmisión…" → la web funciona nada más descomprimir el ZIP, sin errores en consola |
+
+## 🧪 Verificación (v0.1.1)
+
+- Nueva suite `scripts/test-fase6.sh`: **20/20** (proxy JSON sin host real, artwork validado, caché, traducción del artwork del navegador, placeholder sin configurar, cron exit 1, escaneo anti-hardcodeo del repo completo).
+- Regresión completa: integración v2 **50/50**, ciclo **26/26**, HTTP ciclo **23/23**, votos/portadas **29/29**. `php -l` y `node --check` limpios.
+- Escaneo: cero apariciones del dominio real, del token antiguo o de tokens de GitHub en el repositorio.

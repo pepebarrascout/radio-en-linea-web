@@ -214,7 +214,7 @@
               <a href="#" class="social-link transition-colors" aria-label="YouTube"><i class="fab fa-youtube text-xl"></i></a>
             </div>
             <p class="text-sm text-faint">
-              © <span id="footer-year"></span> Que Chilero Radio. Todos los derechos reservados.
+              © <span id="footer-year"></span> Que Chilero Radio.
             </p>
           </div>
         </div>
