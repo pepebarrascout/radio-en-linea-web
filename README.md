@@ -6,7 +6,7 @@
         <a href="https://github.com/pepebarrascout/radio-en-linea-web/issues"><img alt="GitHub Issues" src="https://img.shields.io/github/issues/pepebarrascout/radio-en-linea-web?color=000080"/></a>
         <a href="https://www.php.net/"><img alt="PHP" src="https://img.shields.io/badge/PHP-%3E%3D%207.4-777BB4?logo=php&logoColor=white"/></a>
         <a href="https://developer.mozilla.org/es/docs/Web/Progressive_web_apps"><img alt="PWA" src="https://img.shields.io/badge/PWA-Instalable-5A0FC8?logo=pwa&logoColor=white"/></a>
-        <a href="https://www.jellyfin.org/"><img alt="Jellyfin" src="https://img.shields.io/badge/Jellyfin-10.11.x-blue.svg"/></a>
+        <a href="https://www.jellyfin.org/"><img alt="Jellyfin" src="https://img.shields.io/badge/Jellyfin-12.1.x-blue.svg"/></a>
     </p>
 </div>
 
@@ -134,18 +134,18 @@ Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y b
 ## 🔄 Como Funciona
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                      Tu hosting (PHP)                       │
-│                                                             │
-│  ┌──────────────┐   cron 1 min   ┌──────────────────────┐  │
-│  │   index.php   │──────────────▶│  api/cron-update.php │  │
-│  │  + app.js     │               │  (historial 24/7)    │  │
+┌───────────────────────────────────────────────────────────┐
+│                    Tu hosting (PHP)                       │
+│                                                           │
+│  ┌──────────────┐  cron 1 min   ┌──────────────────────┐  │
+│  │   index.php  │─────────────▶│  api/cron-update.php │  │
+│  │  + app.js    │               │  (historial 24/7)    │  │
 │  └──────┬───────┘               └──────────┬───────────┘  │
 │         │                                  │              │
 │         ▼                                  ▼              │
 │  ┌──────────────┐               ┌──────────────────────┐  │
-│  │ api/history.  │               │ api/covers/ (150px)  │  │
-│  │ php (JSON)    │               │ portadas en caché    │  │
+│  │ api/history. │               │ api/covers/ (150px)  │  │
+│  │ php (JSON)   │               │ portadas en caché    │  │
 │  └──────────────┘               └──────────────────────┘  │
 │         │                                  ▲              │
 │         ▼                                  │              │
