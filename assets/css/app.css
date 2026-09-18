@@ -18,3 +18,24 @@
 .install-close:hover{color:#1a1a1a}
 .dark .install-close:hover{color:#ffffff}
 @keyframes qcr-slide-up{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}
+/* ═══════════════════════════════════════════════════════════════
+   Waveform decorativa + barra de progreso (v0.1.2) — Que Chilero Radio
+   (CSS propio: no depende de regenerar Tailwind; mismo patrón que
+   el bloque del banner de instalación de arriba)
+   ═══════════════════════════════════════════════════════════════ */
+/* Waveform: barras verticales redondeadas junto al botón play.
+   En reposo quedan PLANAS (altura mínima); al reproducir cada
+   barra "baila" con su propio pico, ciclo y retardo aleatorios
+   (los genera app.js como variables CSS --h / --d / --delay). */
+.waveform{display:flex;align-items:center;gap:3px;height:32px;min-width:0;overflow:hidden}
+.waveform span{display:block;width:3px;height:5px;border-radius:2px;flex-shrink:0;background-color:#000080;transition:height .35s ease}
+.dark .waveform span{background-color:#4c6ef5}
+.waveform.playing span{animation:qcr-wave var(--d,1s) ease-in-out var(--delay,0s) infinite alternate}
+@keyframes qcr-wave{from{height:5px}to{height:var(--h,28px)}}
+/* Accesibilidad: sin movimiento, la waveform queda estática a media altura */
+@media (prefers-reduced-motion: reduce){.waveform.playing span{animation:none;height:14px}}
+/* Barra de progreso ilustrativa de la canción actual (solo la barra) */
+.song-progress-track{height:4px;border-radius:9999px;background-color:rgba(0,0,0,.08);overflow:hidden}
+.dark .song-progress-track{background-color:rgba(255,255,255,.14)}
+.song-progress-fill{height:100%;width:0%;border-radius:9999px;background-color:#000080;transition:width 1s linear}
+.dark .song-progress-fill{background-color:#4c6ef5}

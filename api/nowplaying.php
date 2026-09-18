@@ -24,6 +24,7 @@
  */
 
 require_once __DIR__ . '/np-lib.php';
+require_once __DIR__ . '/history-lib.php';   // readHistoryLocked(): hora de inicio de la canción
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -67,6 +68,8 @@ if ($upstream === '') {
         'duration'   => '',
         'artworkUrl' => 'api/artwork.php',
         'itemId'     => '',
+        'elapsedSec' => null,    // barra de progreso: sin datos → el cliente la oculta
+        'serverTime' => time(),
     ], JSON_UNESCAPED_UNICODE);
     exit;   // (aún no hay lock abierto: nada que liberar)
 }
@@ -108,6 +111,27 @@ if (!is_array($data)) {
 $realHost = (string)(parse_url($upstream, PHP_URL_HOST) ?: '');
 $data     = qcrScrubHost($data, $realHost);
 $data['artworkUrl'] = 'api/artwork.php';
+
+// ── 5b) Progreso ilustrativo de la canción ─────────────────
+// La hora de inicio de la emisión actual la conoce el historial
+// ('ts' se guarda al registrar cada canción nueva). Si coincide
+// con history[0] se calcula el tiempo transcurrido EN EL
+// SERVIDOR: el navegador no depende del reloj del teléfono del
+// oyente (puede estar desajustado). elapsedSec = null → sin dato
+// (canción aún no registrada o sin emisión): el cliente oculta
+// la barra en lugar de inventar un avance.
+$elapsedSec = null;
+$npTitle  = trim((string)($data['title'] ?? ''));
+$npArtist = trim((string)($data['artist'] ?? ''));
+if (!empty($data['isPlaying']) && $npTitle !== '' && $npTitle !== PLACEHOLDER_TITLE && $npArtist !== '') {
+    $hist = readHistoryLocked();
+    if (!empty($hist) && isset($hist[0]['title'], $hist[0]['artist'], $hist[0]['ts'])
+        && $hist[0]['title'] === $npTitle && $hist[0]['artist'] === $npArtist) {
+        $elapsedSec = max(0, time() - (int)$hist[0]['ts']);
+    }
+}
+$data['elapsedSec'] = $elapsedSec;
+$data['serverTime'] = time();
 
 $json = json_encode($data, JSON_UNESCAPED_UNICODE);
 
