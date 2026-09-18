@@ -156,7 +156,7 @@ Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y b
 │  │ api/vote.php │  votos anónimos con      │              │
 │  │ api/votes.php│  itemId de Jellyfin ─────┘              │
 │  └──────────────┘                                         │
-└────────────────────────┬───────────────────────────────────┘
+└────────────────────────┬──────────────────────────────────┘
                          │ NowPlaying / artwork / consumo semanal
                          ▼
 ┌────────────────────────────────────────────────────────────┐
