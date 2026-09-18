@@ -124,6 +124,14 @@
                   <span id="player-duration-text"></span>
                 </p>
 
+                <!-- Progreso ilustrativo de la canción (solo la barra:
+                     el total ya se muestra en la píldora de duración) -->
+                <div id="song-progress" class="hidden mt-3">
+                  <div class="song-progress-track">
+                    <div id="song-progress-fill" class="song-progress-fill"></div>
+                  </div>
+                </div>
+
                 <!-- Votos de la canción actual (sin conteos: no son públicos) -->
                 <div id="player-votes" class="mt-4 flex items-center justify-center md:justify-start gap-2">
                   <button id="player-vote-like" data-vote="like" class="vote-btn vote-btn-inactive px-3 py-2 text-sm" aria-label="Me gusta">
@@ -135,15 +143,14 @@
                 </div>
               </div>
 
-              <!-- Play Button -->
+              <!-- Play Button + Waveform decorativa -->
               <div class="mt-6 flex items-center justify-center md:justify-start gap-4">
-                <button id="play-btn" class="play-btn w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl transition-all duration-300 hover:scale-105 shadow-lg">
+                <button id="play-btn" class="play-btn w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl transition-all duration-300 hover:scale-105 shadow-lg" aria-label="Reproducir radio en vivo">
                   <i id="play-icon" class="fas fa-play"></i>
                 </button>
-                <div class="text-sm text-subtle">
-                  <p class="font-medium">Escucha en vivo</p>
-                  <p>Stream 24/7 • quechilero.com</p>
-                </div>
+                <!-- Waveform decorativa: se anima al reproducir y queda
+                     plana al pausar (JS genera las barras; CSS las anima) -->
+                <div id="waveform" class="waveform" aria-hidden="true"></div>
               </div>
             </div>
           </div>

@@ -22,6 +22,9 @@
 |---|---|
 | 📡 **En vivo 24/7** | Reproductor del stream de Icecast con indicador EN VIVO |
 | 🎵 **Historial automático** | El servidor registra las canciones cada minuto vía cron, aunque nadie esté navegando |
+| 📶 **Waveform animada** | Barras junto al botón play que «bailan» al reproducir y quedan planas en pausa (decorativa, sin coste de batería) |
+| 📊 **Progreso de la canción** | Barra ilustrativa del avance de la canción en emisión, calculada en el servidor con la hora de inicio del historial |
+| 📆 **Día siempre visible** | La pestaña del día actual se auto-centra al cargar, al tocarla y al rotar el móvil |
 | 🖼️ **Portadas de discos** | Miniaturas en caché local servidas desde el propio hosting |
 | 📅 **Programación semanal** | Programas por día y horario editando un simple `programacion.json` |
 | 🗳️ **Votos de oyentes** | Like/dislike anónimo (cookie, 1 voto activo por canción, cambiable) |
@@ -125,8 +128,8 @@ Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y b
 |---|---|
 | `programacion.json` | Crea una copia de `programacion.json.example` y edítala: programas por día con `dia`, `hora_inicio`, `hora_fin`, `programa`, `descripción` |
 | `index.php` | Textos, estructura del header/footer/hero, fuentes (Google Fonts) y el stream (`<audio src="https://tu-dominio.com/radio">`) |
-| `assets/css/app.css` | Todos los estilos: paleta de colores (variables al inicio del archivo), tipografías, botones, tarjetas, tema claro/oscuro |
-| `assets/js/app.js` | Bloque de configuración al inicio (URLs locales, stream) + render dinámico: filas de programación (`renderSchedule`), íconos de programas (`getProgramIcon`), historial (`renderHistory`) |
+| `assets/css/app.css` | Todos los estilos: paleta de colores (variables al inicio del archivo), tipografías, botones, tarjetas, tema claro/oscuro. Bloques propios al final: banner de instalación, `.waveform` (colores y animación de las barras) y `.song-progress-*` (barra de progreso) |
+| `assets/js/app.js` | Bloque de configuración al inicio (URLs locales, stream) + render dinámico: filas de programación (`renderSchedule`), íconos de programas (`getProgramIcon`), historial (`renderHistory`), barras de la waveform (`initWaveform`: número y tamaño), progreso (`renderProgress`) y centrado de días (`centerDayTab`) |
 | `api/config.php` | URL del servidor de la radio, token de consumo y clave HTTP del cron |
 
 ---
@@ -163,7 +166,7 @@ Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y b
 
 ### Flujo de Operacion
 
-1. **Ahora suena**: el reproductor consulta `api/nowplaying.php` (proxy del propio hosting que oculta el servidor de la radio) cada 10 s y pinta portada, metadatos y votos al instante.
+1. **Ahora suena**: el reproductor consulta `api/nowplaying.php` (proxy del propio hosting que oculta el servidor de la radio) cada 10 s y pinta portada, metadatos, votos y barra de progreso al instante.
 2. **Historial 24/7**: el cron del servidor registra cada canción (con su `itemId`) y baja la portada a `api/covers/`. Si un visitante detecta el cambio antes, el navegador hace un respaldo idempotente que además dispara la descarga de la portada en ese mismo momento.
 3. **Votos**: cada oyente vota 👍/👎 una vez por canción (cookie anónima `qc_vid`, cambio y anulación permitidos). El voto se guarda con el `itemId` de Jellyfin.
 4. **Ciclo semanal**: el plugin llama `api/votes.php?token=...` 1 vez/semana → recibe todo lo acumulado ordenado por popularidad, se guarda respaldo y el contador vuelve a cero (todos pueden volver a votar).
@@ -176,7 +179,7 @@ Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y b
 |---|---|---|
 | `api/history.php` | GET | Historial público (últimas 10 canciones + portadas, sin campos internos) |
 | `api/history.php` | POST | Respaldo idempotente desde el navegador (incluye `artworkUrl` para bajar la portada al instante) |
-| `api/nowplaying.php` | GET | Proxy local de "Ahora suena" (caché breve de 5 s; nunca expone el dominio del upstream) |
+| `api/nowplaying.php` | GET | Proxy local de "Ahora suena" (caché breve de 5 s; nunca expone el dominio del upstream). Incluye `elapsedSec`/`serverTime` para la barra de progreso |
 | `api/artwork.php` | GET | Proxy de portadas del reproductor (`maxWidth` 16–2048; solo imágenes validadas) |
 | `api/vote.php` | GET | Mis votos según cookie anónima (sin conteos: no son públicos) |
 | `api/vote.php` | POST | Emitir / cambiar / anular voto `{ artist, title, vote, itemId }` |

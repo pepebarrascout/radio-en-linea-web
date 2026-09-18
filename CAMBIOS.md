@@ -286,3 +286,32 @@ Fecha: 2026-09-15
 - Nueva suite `scripts/test-fase6.sh`: **20/20** (proxy JSON sin host real, artwork validado, caché, traducción del artwork del navegador, placeholder sin configurar, cron exit 1, escaneo anti-hardcodeo del repo completo).
 - Regresión completa: integración v2 **50/50**, ciclo **26/26**, HTTP ciclo **23/23**, votos/portadas **29/29**. `php -l` y `node --check` limpios.
 - Escaneo: cero apariciones del dominio real, del token antiguo o de tokens de GitHub en el repositorio.
+
+---
+
+# v0.1.2 — Waveform, progreso de la canción y día siempre visible
+
+## 🎛️ Interfaz
+
+| Cambio | Detalle |
+|---|---|
+| **Waveform animada** junto al play | 24 barras verticales redondeadas (navy / azul en oscuro) donde antes estaba el texto "Escucha en vivo". Al reproducir, cada barra «baila» con su propio pico, ciclo y retardo aleatorios (efecto ecualizador); al pausar vuelven a quedar **planas** con transición suave. Es decorativa: no analiza el audio real (eso exigiría Web Audio API + CORS y gasta batería). Respeta `prefers-reduced-motion` y se desincroniza el arranque con retardos negativos |
+| **Barra de progreso de la canción** | Barra fina ilustrativa bajo la píldora de duración: muestra cuánto avanzó la canción en emisión. **Sin etiquetas de tiempo** (el total ya se ve en la píldora, que queda intacta). Se oculta sola si no hay duración conocida o si la canción aún no está en el historial — nunca muestra un avance inventado. Se clampa al 100 % si la detección tardó más que la duración |
+| **Pestaña del día siempre visible** | En móvil el contenedor de días se desliza horizontalmente: el día activo ahora se **auto-centra** al cargar la web, **al tocar** cualquier día (desplazamiento suave, sin re-pintar el HTML para no perder la posición) y **al cambiar el ancho** de la ventana (rotación, barra de URL del navegador) |
+
+## ⚙️ Técnico
+
+| Cambio | Detalle |
+|---|---|
+| `api/nowplaying.php` | Nuevos campos `elapsedSec` (segundos transcurridos de la canción) y `serverTime`. El cálculo se hace **en el servidor** restando `time()` − `ts` de `history[0]` cuando coincide con la canción en emisión: el navegador no depende del reloj del teléfono del oyente. `elapsedSec: null` → sin dato (el cliente oculta la barra). Retrocompatible: ningún campo cambió |
+| `assets/js/app.js` | `initWaveform()` genera las barras con variables CSS aleatorias; `updatePlayButton()` alterna la clase `playing`; `durationStringToSeconds()` + `updateProgressFromNp()` + `renderProgress()` mantienen la barra (avance local de 1 s entre sondeos de 10 s, resincronizado en cada respuesta); `centerDayTab()` centra el día (`auto` al cargar/redimensionar, `smooth` al tocar); el clic de día ya no re-pinta el innerHTML (evita el salto brusco) |
+| `assets/css/app.css` | Bloque propio al final (mismo patrón que el banner de instalación): `.waveform`, `@keyframes qcr-wave`, `.song-progress-track` / `.song-progress-fill`, variantes `.dark` y `prefers-reduced-motion` |
+| `sw.js` | `CACHE_NAME` → `qcr-static-v6` (los visitantes reciben la nueva versión al recargar) |
+| PWA | Instalación intacta: manifest, iconos, banner Android/iOS y registro del service worker sin cambios |
+
+## 🧪 Verificación (v0.1.2)
+
+- Nueva suite `scripts/test-fase7.sh`: **37/37** (elapsedSec ≈ esperado desde el historial, null sin coincidencia, placeholder con campos nuevos, HTML con waveform/progreso, CSS y JS nuevos, SW v6, PWA intacta, escaneo anti-secretos).
+- Verificación en navegador real (viewport 390 px y escritorio): 24 barras generadas, reposo plano (5 px) → animación con picos al reproducir → planas al pausar; pestaña del día centrada al cargar (`scrollLeft` 303), al tocar Domingo (403) y tras redimensionar (321); barra de progreso visible con color de marca en claro y oscuro.
+- Regresión completa: integración v2 **50/50**, ciclo **26/26**, HTTP ciclo **23/23**, votos/portadas **29/29**, fase 6 **20/20**. Total **185 aserciones** verdes. `php -l` + `node --check` limpios.
+- Escaneo: cero tokens de GitHub, cero dominios reales del servidor de la radio y cero token de consumo en el repositorio.

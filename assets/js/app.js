@@ -464,8 +464,58 @@
     } catch (e) { /* sin soporte */ }
   }
 
+  // ── Progreso ilustrativo de la canción ───────────────────
+  // El servidor calcula elapsedSec (segundos desde que empezó la
+  // emisión actual, según la hora de inicio del historial) y lo
+  // manda en cada sondeo de NowPlaying. Entre sondeos, un
+  // temporizador de 1 s completa el avance local. Es una barra
+  // ILUSTRATIVA: sin duración o sin hora de inicio conocida se
+  // oculta en vez de mostrar un avance inventado. La píldora de
+  // duración del reproductor se queda exactamente igual.
+  var progress = {
+    elapsedAtFetch: null,   // segundos transcurridos según el servidor
+    fetchedAt: 0,           // Date.now() del sondeo (para el avance local)
+    durationSec: 0,         // duración "m:ss" → segundos
+  };
+
+  function durationStringToSeconds(d) {
+    var m = /^(\d+):(\d{1,2})$/.exec(String(d || '').trim());
+    if (!m) return 0;
+    return (parseInt(m[1], 10) * 60) + parseInt(m[2], 10);
+  }
+
+  /** Refresca los datos de progreso con cada respuesta de NowPlaying. */
+  function updateProgressFromNp(np) {
+    progress.durationSec = durationStringToSeconds(np && np.duration);
+    progress.elapsedAtFetch = (np && typeof np.elapsedSec === 'number') ? np.elapsedSec : null;
+    progress.fetchedAt = Date.now();
+    renderProgress();
+  }
+
+  /** Pinta/oculta la barra y calcula el porcentaje actual. */
+  function renderProgress() {
+    var box = $('song-progress');
+    var fill = $('song-progress-fill');
+    if (!box || !fill) return;
+
+    var np = state.nowPlaying;
+    var realSong = np && np.title && np.title !== PLACEHOLDER_TITLE && np.artist;
+    if (!realSong || progress.durationSec <= 0 || progress.elapsedAtFetch === null) {
+      box.classList.add('hidden');
+      fill.style.width = '0%';
+      return;
+    }
+    box.classList.remove('hidden');
+
+    // Avance: dato del servidor + lo corrido localmente desde el sondeo
+    var elapsed = progress.elapsedAtFetch + (Date.now() - progress.fetchedAt) / 1000;
+    var pct = Math.max(0, Math.min(100, (elapsed / progress.durationSec) * 100));
+    fill.style.width = pct.toFixed(1) + '%';
+  }
+
   function renderPlayer(np) {
     state.nowPlaying = np;
+    updateProgressFromNp(np);
 
     // Portada: reconstruida SOLO cuando cambia la canción (sin parpadeos).
     // La clave incluye título/artista: al cambiar, el parámetro v= del URL
@@ -572,6 +622,27 @@
       return '<button type="button" class="' + cls + '" data-day="' + index + '">' +
         '<span class="mr-1">' + dayIcons[index] + '</span>' + esc(day) + '</button>';
     }).join('');
+    // Al cargar, el día actual debe quedar a la vista (en móvil el
+    // contenedor se desliza horizontalmente y de jueves a domingo
+    // el botón activo queda fuera de la pantalla sin este ajuste).
+    centerDayTab('auto');
+  }
+
+  // ── Auto-centrado de la pestaña del día ───────────────
+  // Centra el botón del día activo en el contenedor deslizable sin
+  // mover la página verticalmente (solo se ajusta scrollLeft).
+  function centerDayTab(behavior) {
+    var tabs = $('day-tabs');
+    if (!tabs) return;
+    var btn = tabs.querySelector('.tab-selected');
+    if (!btn) return;
+    var target = btn.offsetLeft - (tabs.clientWidth - btn.offsetWidth) / 2;
+    if (target < 0) target = 0;
+    try {
+      tabs.scrollTo({ left: target, behavior: behavior || 'smooth' });
+    } catch (e) {
+      tabs.scrollLeft = target;   // navegadores sin opciones en scrollTo
+    }
   }
 
   var lastScheduleKey = '';
@@ -698,6 +769,29 @@
     if (!btn || !icon) return;
     btn.classList.toggle('playing', state.isPlaying);
     icon.className = 'fas ' + (state.isPlaying ? 'fa-pause' : 'fa-play');
+    // Waveform decorativa: animada mientras suena, plana en pausa
+    var wf = $('waveform');
+    if (wf) wf.classList.toggle('playing', state.isPlaying);
+  }
+
+  // ── Waveform decorativa ──────────────────────────────────────
+  // Barras junto al botón play. Es DECORATIVA (efecto ecualizador):
+  // no analiza el audio real — eso exigiría Web Audio API, CORS en
+  // el stream y un coste de batería que ninguna radio web asume.
+  // Cada barra recibe su pico (--h), ciclo (--d) y retardo (--delay)
+  // aleatorios; el retardo negativo evita que todas arranquen
+  // sincronizadas. En pausa el CSS las devuelve a su altura plana.
+  function initWaveform() {
+    var wf = $('waveform');
+    if (!wf || wf.children.length) return;
+    var BARS = 24;
+    for (var i = 0; i < BARS; i++) {
+      var bar = document.createElement('span');
+      bar.style.setProperty('--h', (10 + Math.floor(Math.random() * 19)) + 'px');      // pico 10–28px
+      bar.style.setProperty('--d', (0.55 + Math.random() * 0.6).toFixed(2) + 's');      // ciclo 0.55–1.15s
+      bar.style.setProperty('--delay', (-Math.random() * 0.8).toFixed(2) + 's');        // desincronizada
+      wf.appendChild(bar);
+    }
   }
 
   // ── Eventos globales ───────────────────────────────────────
@@ -722,7 +816,13 @@
         var btn = e.target.closest('[data-day]');
         if (!btn) return;
         state.activeDay = parseInt(btn.getAttribute('data-day'), 10);
-        renderDayTabs();
+        // Solo alternar clases: re-pintar el innerHTML resetearía el
+        // desplazamiento horizontal del contenedor (y el salto sería
+        // brusco). El día tocado queda centrado con desplazamiento suave.
+        Array.prototype.forEach.call(tabs.querySelectorAll('[data-day]'), function (b) {
+          b.classList.toggle('tab-selected', b === btn);
+        });
+        centerDayTab('smooth');
         renderSchedule(true);
       });
     }
@@ -745,6 +845,20 @@
       audio.addEventListener('pause', function () { state.isPlaying = false; updatePlayButton(); });
       audio.addEventListener('playing', function () { state.isPlaying = true; updatePlayButton(); });
     }
+
+    // Rotación o cambio de ancho (p. ej. la barra de URL del móvil):
+    // algunos navegadores resetean el desplazamiento horizontal del
+    // contenedor de pestañas → volver a centrar el día activo para
+    // que SIEMPRE quede a la vista. Solo reacciona si cambió el ancho.
+    var lastTabsWidth = 0;
+    window.addEventListener('resize', function () {
+      var tabs = $('day-tabs');
+      if (!tabs) return;
+      if (tabs.clientWidth !== lastTabsWidth) {
+        lastTabsWidth = tabs.clientWidth;
+        centerDayTab('auto');
+      }
+    });
   }
 
   // ── Service Worker (PWA) ───────────────────────────────────
@@ -844,6 +958,7 @@
 
     applyTheme();
     loadMyVotesLocal();   // marca "ya voté" visible desde el primer render
+    initWaveform();       // barras decorativas junto al botón play
     renderDayTabs();
     renderSchedule();
     renderPlayer(state.nowPlaying);
@@ -857,6 +972,7 @@
     fetchNowPlaying();
 
     setInterval(fetchNowPlaying, 10000);        // canción actual cada 10s
+    setInterval(renderProgress, 1000);          // avance suave de la barra (1s)
     setInterval(renderSchedule, 60000);         // badge AHORA al minuto exacto
     setInterval(loadHistory, 60000);            // portadas/hora sin recargar
     setInterval(loadSchedule, 5 * 60 * 1000);   // programación cada 5 min
