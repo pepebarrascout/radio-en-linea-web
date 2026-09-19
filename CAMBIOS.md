@@ -315,3 +315,32 @@ Fecha: 2026-09-15
 - Verificación en navegador real (viewport 390 px y escritorio): 24 barras generadas, reposo plano (5 px) → animación con picos al reproducir → planas al pausar; pestaña del día centrada al cargar (`scrollLeft` 303), al tocar Domingo (403) y tras redimensionar (321); barra de progreso visible con color de marca en claro y oscuro.
 - Regresión completa: integración v2 **50/50**, ciclo **26/26**, HTTP ciclo **23/23**, votos/portadas **29/29**, fase 6 **20/20**. Total **185 aserciones** verdes. `php -l` + `node --check` limpios.
 - Escaneo: cero tokens de GitHub, cero dominios reales del servidor de la radio y cero token de consumo en el repositorio.
+
+---
+
+# v0.1.3 — Ajustes tras la prueba en vivo (pausa real, progreso centrado, waveform viva, día siempre azul)
+
+## 🎛️ Interfaz
+
+| Cambio | Detalle |
+|---|---|
+| **Barra de progreso centrada** | Las píldoras de género/duración pasan a una **fila flex** (antes eran `inline-flex` alineadas a la línea base de texto, lo que dejaba un colchón invisible que «pegaba» la barra a las píldoras). La barra ahora usa el mismo margen arriba que hacia los botones de voto: queda **en medio exacto** entre la información de género y los botones me gusta / no me gusta |
+| **El botón detiene de verdad** | En un stream en vivo «pausar» solo congela la reproducción: el navegador mantiene la conexión y **sigue descargando en segundo plano**; al reanudar continuaba donde se quedó (música del pasado) aunque el vivo ya cambiara de canción. Ahora el botón **corta la conexión y vacía el búfer** (`stopStream()`), y play **reconecta al borde del vivo** con un cache-buster (`startStream()`). Los botones de la pantalla de bloqueo / notificación (Media Session) usan la misma lógica |
+| **Waveform más viva** | Movimiento tipo ecualizador más notorio: ciclos de **0.35–0.75 s** (antes 0.55–1.15 s) y picos de **14–40 px** (antes 10–28 px) en un contenedor más alto (**44 px** vs 32 px). Sigue siendo decorativa, plana al detener y respeta `prefers-reduced-motion` |
+| **Día marcado siempre azul** | En móvil el estado `:hover` queda «pegado» al último botón tocado y, en tema oscuro, su fondo tenía mayor especificidad que el azul del día seleccionado: al tocar otro día «nadie» parecía marcado. Nueva regla `.tab-btn.tab-selected:hover` (claro y oscuro): el día elegido conserva **el mismo azul navy** del marcado inicial |
+
+## ⚙️ Técnico
+
+| Archivo | Cambio |
+|---|---|
+| `index.php` | Píldoras de género/duración envueltas en `flex flex-wrap gap-2` (el espaciado bajo ellas queda determinista); `#song-progress` con `mt-4` (igual al `mt-4` de los votos). Sin cambios de IDs: el JS no se entera |
+| `assets/js/app.js` | `togglePlay()` dividido en `stopStream()` (pause + removeAttribute('src') + load) y `startStream()` (src con `?t=Date.now()` + load + play); handlers de `navigator.mediaSession` play/pause conectados a la misma lógica; `initWaveform()` con los rangos nuevos de pico/ciclo |
+| `assets/css/app.css` | `.waveform` altura 44 px y reposo 6 px; `@keyframes qcr-wave` hasta `var(--h,40px)`; reduced-motion a 20 px; regla nueva `.tab-btn.tab-selected:hover` + variante `.dark` |
+| `sw.js` | `CACHE_NAME` → `qcr-static-v7` (imprescindible para que los móviles reciban el CSS/JS nuevos) |
+
+## 🧪 Verificación (v0.1.3)
+
+- Nueva suite `scripts/test-fase8.sh`: **28/28** (markup con fila flex y `mt-4`, detención real con corte de stream, cache-buster de reconexión, Media Session sincronizada, rangos nuevos de la waveform, regla hover del día marcado, SW v7, PWA intacta, lint y escaneo anti-secretos).
+- Verificación en navegador real (viewport móvil 390 px, claro y oscuro): márgenes de la barra medidos **16 px arriba / 16 px abajo** (centrada exacta); waveform a 44 px animando con ciclos ≈0.39 s; tras detener, el elemento de audio queda **sin src** (conexión cortada) y las barras planas; al tocar «Viernes» con el hover pegado el botón mantiene `rgb(0,0,128)` con texto blanco.
+- Regresión completa: fase 7 **37/37**, fase 6 **20/20**, integración v2 **50/50**, ciclo **26/26**, HTTP ciclo **23/23**, votos/portadas **29/29**. Total **213 aserciones** verdes. `php -l` + `node --check` limpios.
+- Escaneo: cero tokens de GitHub, cero dominios reales del servidor de la radio y cero token de consumo en el repositorio.

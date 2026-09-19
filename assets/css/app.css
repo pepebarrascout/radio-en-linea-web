@@ -19,23 +19,36 @@
 .dark .install-close:hover{color:#ffffff}
 @keyframes qcr-slide-up{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}
 /* ═══════════════════════════════════════════════════════════════
-   Waveform decorativa + barra de progreso (v0.1.2) — Que Chilero Radio
+   Waveform decorativa + barra de progreso (v0.1.2, ajustada en
+   v0.1.3) — Que Chilero Radio
    (CSS propio: no depende de regenerar Tailwind; mismo patrón que
    el bloque del banner de instalación de arriba)
    ═══════════════════════════════════════════════════════════════ */
 /* Waveform: barras verticales redondeadas junto al botón play.
    En reposo quedan PLANAS (altura mínima); al reproducir cada
    barra "baila" con su propio pico, ciclo y retardo aleatorios
-   (los genera app.js como variables CSS --h / --d / --delay). */
-.waveform{display:flex;align-items:center;gap:3px;height:32px;min-width:0;overflow:hidden}
-.waveform span{display:block;width:3px;height:5px;border-radius:2px;flex-shrink:0;background-color:#000080;transition:height .35s ease}
+   (los genera app.js como variables CSS --h / --d / --delay).
+   v0.1.3: contenedor más alto (44px), picos hasta 40px y ciclos
+   de 0.35–0.75s para un movimiento más vivo, tipo ecualizador. */
+.waveform{display:flex;align-items:center;gap:3px;height:44px;min-width:0;overflow:hidden}
+.waveform span{display:block;width:3px;height:6px;border-radius:2px;flex-shrink:0;background-color:#000080;transition:height .25s ease}
 .dark .waveform span{background-color:#4c6ef5}
-.waveform.playing span{animation:qcr-wave var(--d,1s) ease-in-out var(--delay,0s) infinite alternate}
-@keyframes qcr-wave{from{height:5px}to{height:var(--h,28px)}}
+.waveform.playing span{animation:qcr-wave var(--d,.6s) ease-in-out var(--delay,0s) infinite alternate}
+@keyframes qcr-wave{from{height:6px}to{height:var(--h,40px)}}
 /* Accesibilidad: sin movimiento, la waveform queda estática a media altura */
-@media (prefers-reduced-motion: reduce){.waveform.playing span{animation:none;height:14px}}
+@media (prefers-reduced-motion: reduce){.waveform.playing span{animation:none;height:20px}}
 /* Barra de progreso ilustrativa de la canción actual (solo la barra) */
 .song-progress-track{height:4px;border-radius:9999px;background-color:rgba(0,0,0,.08);overflow:hidden}
 .dark .song-progress-track{background-color:rgba(255,255,255,.14)}
 .song-progress-fill{height:100%;width:0%;border-radius:9999px;background-color:#000080;transition:width 1s linear}
 .dark .song-progress-fill{background-color:#4c6ef5}
+
+/* ── Día seleccionado de la programación (v0.1.3) ──────────────
+   En móvil el estado :hover queda "pegado" al último botón tocado
+   y, como .dark .tab-btn:hover tiene MAYOR especificidad que
+   .tab-btn.tab-selected, su fondo tapaba el azul del día elegido
+   en tema oscuro (al tocar otro día "nadie" parecía marcado).
+   Fijamos el mismo azul del marcado también bajo :hover, en ambos
+   temas. */
+.tab-btn.tab-selected:hover,
+.dark .tab-btn.tab-selected:hover{background-color:#000080;color:#ffffff}

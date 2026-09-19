@@ -20,11 +20,11 @@
 
 | Caracteristica | Descripcion |
 |---|---|
-| 📡 **En vivo 24/7** | Reproductor del stream de Icecast con indicador EN VIVO |
+| 📡 **En vivo 24/7** | Reproductor del stream de Icecast con indicador EN VIVO. El botón **detiene de verdad** la transmisión (cierra la conexión y vacía el búfer) y play reconecta siempre al borde del vivo — nunca se queda escuchando música «del pasado» |
 | 🎵 **Historial automático** | El servidor registra las canciones cada minuto vía cron, aunque nadie esté navegando |
-| 📶 **Waveform animada** | Barras junto al botón play que «bailan» al reproducir y quedan planas en pausa (decorativa, sin coste de batería) |
+| 📶 **Waveform animada** | Barras junto al botón play, tipo ecualizador, que «bailan» al reproducir y quedan planas al detener (decorativa, sin coste de batería) |
 | 📊 **Progreso de la canción** | Barra ilustrativa del avance de la canción en emisión, calculada en el servidor con la hora de inicio del historial |
-| 📆 **Día siempre visible** | La pestaña del día actual se auto-centra al cargar, al tocarla y al rotar el móvil |
+| 📆 **Día siempre visible** | La pestaña del día actual se auto-centra al cargar, al tocarla y al rotar el móvil; el día marcado conserva su azul aunque el toque deje el botón en estado hover (tema oscuro incluido) |
 | 🖼️ **Portadas de discos** | Miniaturas en caché local servidas desde el propio hosting |
 | 📅 **Programación semanal** | Programas por día y horario editando un simple `programacion.json` |
 | 🗳️ **Votos de oyentes** | Like/dislike anónimo (cookie, 1 voto activo por canción, cambiable) |
@@ -128,7 +128,7 @@ Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y b
 |---|---|
 | `programacion.json` | Crea una copia de `programacion.json.example` y edítala: programas por día con `dia`, `hora_inicio`, `hora_fin`, `programa`, `descripción` |
 | `index.php` | Textos, estructura del header/footer/hero, fuentes (Google Fonts) y el stream (`<audio src="https://tu-dominio.com/radio">`) |
-| `assets/css/app.css` | Todos los estilos: paleta de colores (variables al inicio del archivo), tipografías, botones, tarjetas, tema claro/oscuro. Bloques propios al final: banner de instalación, `.waveform` (colores y animación de las barras) y `.song-progress-*` (barra de progreso) |
+| `assets/css/app.css` | Todos los estilos: paleta de colores (variables al inicio del archivo), tipografías, botones, tarjetas, tema claro/oscuro. Bloques propios al final: banner de instalación, `.waveform` (colores y animación de las barras), `.song-progress-*` (barra de progreso) y el azul del día marcado bajo hover (`.tab-btn.tab-selected:hover`) |
 | `assets/js/app.js` | Bloque de configuración al inicio (URLs locales, stream) + render dinámico: filas de programación (`renderSchedule`), íconos de programas (`getProgramIcon`), historial (`renderHistory`), barras de la waveform (`initWaveform`: número y tamaño), progreso (`renderProgress`) y centrado de días (`centerDayTab`) |
 | `api/config.php` | URL del servidor de la radio, token de consumo y clave HTTP del cron |
 

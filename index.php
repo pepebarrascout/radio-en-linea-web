@@ -115,18 +115,28 @@
                   <i class="fas fa-compact-disc mr-1"></i>
                   <span id="player-album-text"></span>
                 </p>
-                <p id="player-genre" class="hidden text-sm mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full pill">
-                  <i class="fas fa-music text-xs"></i>
-                  <span id="player-genre-text"></span>
-                </p>
-                <p id="player-duration" class="hidden text-sm ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full pill">
-                  <i class="fas fa-clock text-xs"></i>
-                  <span id="player-duration-text"></span>
-                </p>
+                <!-- Píldoras en fila flex (no inline): el espaciado bajo
+                     ellas queda determinista y la barra de progreso
+                     puede centrarse de verdad entre esta fila y los
+                     botones de voto -->
+                <div class="mt-2 flex flex-wrap items-center justify-center md:justify-start gap-2">
+                  <p id="player-genre" class="hidden text-sm inline-flex items-center gap-1 px-2 py-0.5 rounded-full pill">
+                    <i class="fas fa-music text-xs"></i>
+                    <span id="player-genre-text"></span>
+                  </p>
+                  <p id="player-duration" class="hidden text-sm inline-flex items-center gap-1 px-2 py-0.5 rounded-full pill">
+                    <i class="fas fa-clock text-xs"></i>
+                    <span id="player-duration-text"></span>
+                  </p>
+                </div>
 
                 <!-- Progreso ilustrativo de la canción (solo la barra:
-                     el total ya se muestra en la píldora de duración) -->
-                <div id="song-progress" class="hidden mt-3">
+                     el total ya se muestra en la píldora de duración).
+                     mt-4 = mismo margen que aplican los botones de voto
+                     (mt-4): la barra queda centrada entre las píldoras
+                     de género/duración y los botones me gusta / no me
+                     gusta. -->
+                <div id="song-progress" class="hidden mt-4">
                   <div class="song-progress-track">
                     <div id="song-progress-fill" class="song-progress-fill"></div>
                   </div>

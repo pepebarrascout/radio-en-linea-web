@@ -745,20 +745,46 @@
   }
 
   // ── Reproducción ───────────────────────────────────────────
+  // En una transmisión EN VIVO "pausar" no basta: el navegador
+  // mantiene la conexión abierta y sigue descargando el stream en
+  // segundo plano; al reanudar continúa donde se quedó (música "del
+  // pasado") mientras el vivo ya cambió de canción. Por eso el botón
+  // DETIENE de verdad: cierra la conexión y vacía el búfer, y el
+  // play siguiente reconecta al borde del vivo.
   var audio = null;
+
+  /** Detención real: corta la descarga y libera el búfer. */
+  function stopStream() {
+    try {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load(); // aborta la conexión y libera el búfer del navegador
+    } catch (e) { /* el elemento ya estaba vacío */ }
+  }
+
+  /** Conecta (o reconecta) al borde del vivo y reproduce. */
+  function startStream() {
+    // Cache-buster: garantiza una conexión nueva al punto en vivo
+    var sep = RADIO_STREAM_URL.indexOf('?') >= 0 ? '&' : '?';
+    audio.src = RADIO_STREAM_URL + sep + 't=' + Date.now();
+    audio.load();
+    audio.play().then(function () {
+      state.isPlaying = true;
+      updatePlayButton();
+    }).catch(function (err) {
+      console.error('Error reproduciendo:', err);
+      state.isPlaying = false;
+      updatePlayButton();
+    });
+  }
 
   function togglePlay() {
     if (!audio) return;
     if (state.isPlaying) {
-      audio.pause();
+      stopStream();
       state.isPlaying = false;
     } else {
-      audio.play().then(function () {
-        state.isPlaying = true;
-      }).catch(function (err) {
-        console.error('Error reproduciendo:', err);
-        state.isPlaying = false;
-      });
+      startStream();
     }
     updatePlayButton();
   }
@@ -787,9 +813,9 @@
     var BARS = 24;
     for (var i = 0; i < BARS; i++) {
       var bar = document.createElement('span');
-      bar.style.setProperty('--h', (10 + Math.floor(Math.random() * 19)) + 'px');      // pico 10–28px
-      bar.style.setProperty('--d', (0.55 + Math.random() * 0.6).toFixed(2) + 's');      // ciclo 0.55–1.15s
-      bar.style.setProperty('--delay', (-Math.random() * 0.8).toFixed(2) + 's');        // desincronizada
+      bar.style.setProperty('--h', (14 + Math.floor(Math.random() * 27)) + 'px');      // pico 14–40px
+      bar.style.setProperty('--d', (0.35 + Math.random() * 0.4).toFixed(2) + 's');      // ciclo 0.35–0.75s
+      bar.style.setProperty('--delay', (-Math.random() * 0.7).toFixed(2) + 's');        // desincronizada
       wf.appendChild(bar);
     }
   }
@@ -955,6 +981,16 @@
   function init() {
     audio = $('audio');
     $('footer-year').textContent = String(new Date().getFullYear());
+
+    // Pantalla de bloqueo / notificación del sistema: mismos
+    // comportamientos que el botón de la web (play reconecta al
+    // vivo; "pausa" detiene de verdad la descarga del stream).
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.setActionHandler('play', function () { startStream(); });
+        navigator.mediaSession.setActionHandler('pause', function () { stopStream(); });
+      } catch (e) { /* navegador sin acciones multimedia */ }
+    }
 
     applyTheme();
     loadMyVotesLocal();   // marca "ya voté" visible desde el primer render
