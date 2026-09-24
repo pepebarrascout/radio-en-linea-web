@@ -3,7 +3,7 @@
  * ============================================================
  *  Que Chilero Radio — Disparador de avisos push de programas
  * ============================================================
- *  v1.5 — Corre en el SERVIDOR cada minuto vía cron y envía el
+ *  v0.1.4 — Corre en el SERVIDOR cada minuto vía cron y envía el
  *  aviso «En 10 minutos empieza…» a los suscriptores:
  *
  *      * * * * * php /ruta/a/tu-web/api/push-trigger.php >/dev/null 2>&1

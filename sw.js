@@ -5,7 +5,7 @@
  *   - Navegación (página): red primero, caché como respaldo
  *   - Estáticos (css/js/img/manifest): stale-while-revalidate
  *   - APIs (api/*) y stream de audio: SIEMPRE red (datos vivos)
- *  v1.5 — Notificaciones push (Web Push + VAPID):
+ *  v0.1.4 — Notificaciones push (Web Push + VAPID):
  *   - push: aviso de programa (o anuncio manual) con regla
  *     anti-spam: si el oyente ya está escuchando, se silencia
  *   - notificationclick: abrir/re-enfocar la web y reproducir;
@@ -111,7 +111,7 @@ self.addEventListener('fetch', function (event) {
 });
 
 // ════════════════════════════════════════════════════════════
-//  v1.5 — Notificaciones push (Web Push + VAPID)
+//  v0.1.4 — Notificaciones push (Web Push + VAPID)
 // ════════════════════════════════════════════════════════════
 
 /**

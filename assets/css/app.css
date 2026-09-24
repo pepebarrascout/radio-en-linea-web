@@ -53,7 +53,7 @@
 .tab-btn.tab-selected:hover,
 .dark .tab-btn.tab-selected:hover{background-color:#000080;color:#ffffff}
 
-/* ── Avisos de programas — bloque push opt-in (v1.5) ──────────
+/* ── Avisos de programas — bloque push opt-in (v0.1.4) ──────────
    Discreto a propósito: vive dentro del panel de Programación,
    con borde punteado suave (no un banner agresivo). El oyente
    activa, elige el alcance (todos / tarde-noche) o apaga con un

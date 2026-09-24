@@ -800,7 +800,7 @@
     // Waveform decorativa: animada mientras suena, plana en pausa
     var wf = $('waveform');
     if (wf) wf.classList.toggle('playing', state.isPlaying);
-    // v1.5: el service worker necesita saber si suena (para silenciar
+    // v0.1.4: el service worker necesita saber si suena (para silenciar
     // los avisos push de programas mientras el oyente ya escucha)
     notifySwPlayState();
   }
@@ -903,7 +903,7 @@
     });
   }
 
-  // ── Avisos push de programas (v1.5, opt-in voluntario) ──
+  // ── Avisos push de programas (v0.1.4, opt-in voluntario) ──
   // Anti-spam por diseño: nada de popups ni permisos en la primera
   // visita — el botón vive en el panel de Programación, el oyente
   // elige qué avisos quiere (todos, o solo tarde y noche), puede
@@ -1243,7 +1243,7 @@
     bindPush();
     registerServiceWorker();
 
-    // v1.5: llegada desde una notificación (clic = abrir y reproducir).
+    // v0.1.4: llegada desde una notificación (clic = abrir y reproducir).
     // Mejor esfuerzo: si el navegador bloquea el arranque automático,
     // la radio queda lista con el botón de play bien visible.
     try {

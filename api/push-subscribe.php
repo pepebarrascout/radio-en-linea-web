@@ -3,7 +3,7 @@
  * ============================================================
  *  Que Chilero Radio — Alta y baja de suscripciones push
  * ============================================================
- *  v1.5 — Almacén JSON puro (sin base de datos), igual que los
+ *  v0.1.4 — Almacén JSON puro (sin base de datos), igual que los
  *  votos: api/data/subscribers.json (carpeta protegida por
  *  .htaccess; los navegadores NUNCA acceden a este archivo).
  *
@@ -29,7 +29,7 @@ require_once __DIR__ . '/push-lib.php';
 
 // ── Configuración ────────────────────────────────────────────
 
-// Modos de preferencia válidos (v1.5: el oyente elige)
+// Modos de preferencia válidos (v0.1.4: el oyente elige)
 const PUSH_MODES = ['all', 'evening'];
 
 // Límite anti-abuso

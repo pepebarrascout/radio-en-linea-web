@@ -121,7 +121,7 @@ function durationToSeconds(?string $duration): int
  * las entradas recientes del historial (no duplicar) o es un pase
  * nuevo (registrar).
  *
- * v1.5 — Deduplicación robusta contra el rebote de metadatos.
+ * v0.1.4 — Deduplicación robusta contra el rebote de metadatos.
  *
  * Antes solo se comparaba contra history[0]: si los metadatos
  * rebotaban A→B→A entre dos registradores (cron + navegador), al
@@ -241,7 +241,7 @@ function registerSong(array $song): array
 
     // ¿Es la misma emisión que alguna entrada reciente?
     // (deduplicación robusta: escanea todo el historial visible,
-    // no solo la última — v1.5)
+    // no solo la última — v0.1.4)
     if (!empty($history)
         && isSamePlayRecent($history, $title, $artist, (string)($song['itemId'] ?? ''))) {
         flock($fp, LOCK_UN);

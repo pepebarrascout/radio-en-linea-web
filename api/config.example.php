@@ -55,7 +55,7 @@ define('QCR_NOWPLAYING_URL_VALUE', 'PEGA_AQUI_LA_URL_DE_TU_SERVIDOR_DE_RADIO');
 // define('QCR_CRON_SECRET_VALUE', 'una-clave-larga-aleatoria');
 
 /**
- * ⭐ v1.5 — Retro-relleno de portadas viejas (OPCIONAL).
+ * ⭐ v0.1.4 — Retro-relleno de portadas viejas (OPCIONAL).
  *
  * Plantilla de la URL de imágenes de TU servidor Jellyfin, para
  * reparar portadas nulas del historial por itemId (la API de arte
@@ -74,7 +74,7 @@ define('QCR_NOWPLAYING_URL_VALUE', 'PEGA_AQUI_LA_URL_DE_TU_SERVIDOR_DE_RADIO');
 define('QCR_JELLYFIN_IMAGES_URL_VALUE', '');
 
 /**
- * ⭐ v1.5 — Notificaciones push de programas (Web Push con VAPID).
+ * ⭐ v0.1.4 — Notificaciones push de programas (Web Push con VAPID).
  *
  * Se generan UNA SOLA VEZ con el comando:
  *

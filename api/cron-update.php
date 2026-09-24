@@ -237,7 +237,7 @@ if ($registered) {
 // Borra las portadas de canciones que ya salieron del top 10.
 $coversDeleted = gcCovers($history);
 
-// ── Retro-relleno de portadas viejas (v1.5) ───────────────────
+// ── Retro-relleno de portadas viejas (v0.1.4) ───────────────────
 // Repara filas del historial con portada nula usando la plantilla
 // de imágenes de Jellyfin (config opcional QCR_JELLYFIN_IMAGES_URL
 // en config.php; ver README). Máximo 2 descargas por pasada: el

@@ -60,13 +60,14 @@
 
    ```bash
    cd ~/public_html/qc
-   wget https://github.com/pepebarrascout/radio-en-linea-web/releases/download/v0.1.1/radio-en-linea-web-v0.1.1.zip
-   unzip radio-en-linea-web-v0.1.1.zip && rm radio-en-linea-web-v0.1.1.zip
+   wget https://github.com/pepebarrascout/radio-en-linea-web/releases/download/v0.1.4/radio-en-linea-web-v0.1.4.zip
+   unzip radio-en-linea-web-v0.1.4.zip && rm radio-en-linea-web-v0.1.4.zip
    ```
 
 3. Crea la configuración privada (Pasos 1 y 2 de [Configuración](#️-configuracion))
-4. Programa el cron cada 1 minuto (Paso 3)
-5. Abre tu web y pulsa play 🎶
+4. Programa el cron cada 1 minuto (Pasos 3 y 5)
+5. (Opcional) Claves VAPID para los avisos push (Paso 6)
+6. Abre tu web y pulsa play 🎶
 
 > El ZIP trae ya la estructura completa (incluidas las carpetas `api/data/` y `api/covers/` con su `.htaccess` de protección). Los archivos de datos se crean solos la primera vez que se usa la web.
 

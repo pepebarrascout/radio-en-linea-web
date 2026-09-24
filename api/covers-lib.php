@@ -337,7 +337,7 @@ function writeBackfillState(array $state): void
 }
 
 /**
- * v1.5 — Retro-relleno de portadas nulas del historial.
+ * v0.1.4 — Retro-relleno de portadas nulas del historial.
  *
  * Repara las filas del historial que quedaron con portada
  * descargando su imagen por itemId desde la plantilla
@@ -428,7 +428,7 @@ function backfillMissingCovers(array $history, int $maxAttempts = 2, bool $force
  * en el historial (salieron del top 10) y los .tmp huérfanos
  * con más de 1 hora. Devuelve el número de archivos borrados.
  *
- * v1.5 — GC endurecido: también elimina
+ * v0.1.4 — GC endurecido: también elimina
  *   - archivos con nombre inválido (no es 32 hex + .jpg)
  *   - .jpg de 0 bytes (incluso si su canción sigue en la lista:
  *     se re-descargará sola en el siguiente pase)

@@ -3,7 +3,7 @@
  * ============================================================
  *  Que Chilero Radio — Clave pública VAPID para el navegador
  * ============================================================
- *  v1.5 — Endpoint JSON mínimo: devuelve la clave pública VAPID
+ *  v0.1.4 — Endpoint JSON mínimo: devuelve la clave pública VAPID
  *  que applicationServerKey necesita para suscribirse. La clave
  *  pública NO es un secreto (así está diseñado Web Push); el
  *  service worker también la consulta al resuscribirse.

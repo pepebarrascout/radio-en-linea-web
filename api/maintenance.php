@@ -1,7 +1,7 @@
 <?php
 /**
  * ============================================================
- *  Que Chilero Radio — Mantenimiento CLI (v1.5)
+ *  Que Chilero Radio — Mantenimiento CLI (v0.1.4)
  * ============================================================
  *  Herramienta de una línea para la salud del historial y las
  *  portadas. SOLO por CLI (nunca por HTTP: puede borrar archivos).
@@ -262,7 +262,7 @@ switch ($command) {
         $before = count($history);
         $kept = [];
         // De más nuevo a más viejo: cada entrada se conserva solo si NO
-        // es la misma emisión que una ya conservada (misma regla v1.5).
+        // es la misma emisión que una ya conservada (misma regla v0.1.4).
         foreach ($history as $entry) {
             $same = false;
             foreach ($kept as $k) {

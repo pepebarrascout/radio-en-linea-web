@@ -347,7 +347,7 @@ Fecha: 2026-09-15
 
 ---
 
-# v1.5 — Salud del historial/portadas y avisos push de programas
+# v0.1.4 — Salud del historial/portadas y avisos push de programas
 
 ## 🩺 Historial y portadas (temas 2, 3 y 4 pospuestos)
 
@@ -388,7 +388,7 @@ Fecha: 2026-09-15
 | `assets/js/app.js` | Flujo de suscripción completo (`bindPush`, `subscribePush`, `unsubscribePush`, `refreshPushUi`), reporte del estado del reproductor al SW (`notifySwPlayState`), respuestas a consultas del SW y autoplay (`tryAutoplay`, `?autoplay=1`, mensaje `qcr-autoplay`) |
 | `index.php` / `assets/css/app.css` | Bloque de avisos en el panel de Programación (botón + selector de alcance + pista) con estilos propios (claro/oscuro) |
 
-## 🧪 Verificación (v1.5)
+## 🧪 Verificación (v0.1.4)
 
 - Nueva suite `scripts/test-pkg-historial.php`: **39/39** (rebote A→B→A, repetición genuina, itemId, normalización, retro-relleno con servidor de imágenes real + memoria de intentos, GC endurecido, CLI completa).
 - Nueva suite `scripts/test-push.php`: **35/35** end-to-end con servicio push simulado (claves VAPID reales, JWT ES256 verificado contra la pública, cifrado aes128gcm descifrado byte a byte de forma independiente, endpoints de suscripción, ventana de 10 min, idempotencia, limpieza de suscripciones muertas, cabeceras `Authorization: vapid t=…,k=…` + `TTL: 300` + `Content-Encoding: aes128gcm` recibidas por el servicio, aviso manual y prueba).

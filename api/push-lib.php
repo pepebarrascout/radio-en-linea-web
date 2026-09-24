@@ -3,7 +3,7 @@
  * ============================================================
  *  Que Chilero Radio — Web Push puro (sin Composer, sin Firebase)
  * ============================================================
- *  v1.5 — Avisos de programas 10 minutos antes de cada inicio.
+ *  v0.1.4 — Avisos de programas 10 minutos antes de cada inicio.
  *
  *  Implementa los estándares que exige Chrome/Android:
  *    - RFC 8291  Message Encryption for Web Push (aes128gcm)
