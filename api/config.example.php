@@ -53,3 +53,45 @@ define('QCR_NOWPLAYING_URL_VALUE', 'PEGA_AQUI_LA_URL_DE_TU_SERVIDOR_DE_RADIO');
  * Alternativa: variable de entorno QCR_CRON_SECRET.
  */
 // define('QCR_CRON_SECRET_VALUE', 'una-clave-larga-aleatoria');
+
+/**
+ * ⭐ v1.5 — Retro-relleno de portadas viejas (OPCIONAL).
+ *
+ * Plantilla de la URL de imágenes de TU servidor Jellyfin, para
+ * reparar portadas nulas del historial por itemId (la API de arte
+ * del plugin solo expone la canción ACTUAL). El placeholder
+ * {itemId} es obligatorio y la URL debe ser https:
+ *
+ *     https://TU-SERVIDOR-JELLYFIN/Items/{itemId}/Images/Primary
+ *
+ * Sin esta plantilla el retro-relleno queda deshabilitado y las
+ * portadas viejas se reparan por la vía oportunista de siempre
+ * (cuando la canción vuelve a sonar). Dejarla vacía es 100% válido.
+ *
+ * Alternativa: variable de entorno QCR_JELLYFIN_IMAGES_URL
+ * (tiene prioridad sobre este archivo).
+ */
+define('QCR_JELLYFIN_IMAGES_URL_VALUE', '');
+
+/**
+ * ⭐ v1.5 — Notificaciones push de programas (Web Push con VAPID).
+ *
+ * Se generan UNA SOLA VEZ con el comando:
+ *
+ *     php api/push-trigger.php --generate-keys
+ *
+ * y se pegan aquí tal cual muestra el comando. Sin claves el
+ * botón de la web no aparece y el disparador no envía nada.
+ *
+ * La clave PÚBLICA no es un secreto (la recibe el navegador);
+ * la clave PRIVADA sí: este archivo nunca se versiona.
+ */
+define('QCR_VAPID_PUBLIC_KEY_VALUE', 'PEGA_AQUI_LA_CLAVE_PUBLICA_BASE64URL');
+define('QCR_VAPID_PRIVATE_PEM_VALUE', 'PEGA_AQUI_LA_CLAVE_PRIVADA_PEM_COMPLETA');
+
+/**
+ * (Opcional) Contacto que viaja en el token VAPID por si el
+ * servicio push necesita avisarte (formato mailto:).
+ * Alternativa: variable de entorno QCR_VAPID_SUBJECT.
+ */
+define('QCR_VAPID_SUBJECT_VALUE', 'mailto:contacto@quechilero.com');

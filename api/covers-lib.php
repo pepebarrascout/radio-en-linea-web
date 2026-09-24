@@ -34,6 +34,14 @@ define('COVER_SIZE', 150);
 // Timeout de descarga de portada (segundos)
 define('COVER_HTTP_TIMEOUT', 10);
 
+// Tiempo de espera entre intentos de retro-relleno de la MISMA
+// portada fallida (evita martillar un item sin imagen 1440 veces/día)
+define('COVERS_BACKFILL_RETRY_SECONDS', 6 * 3600);   // 6 horas
+
+// Archivo de memoria de intentos de retro-relleno (carpeta data/,
+// protegida por .htaccess; QCR_BACKFILL_STATE_FILE para pruebas)
+define('COVERS_BACKFILL_STATE_FILE', getenv('QCR_BACKFILL_STATE_FILE') ?: __DIR__ . '/data/backfill-state.json');
+
 // ── Utilidades ───────────────────────────────────────────────
 
 /**
@@ -139,6 +147,125 @@ function isValidImageBytes(?string $bytes): bool
 }
 
 /**
+ * ¿Es un host privado/loopback? (Jellyfin en la LAN local sin TLS)
+ * http:// solo se acepta para estos hosts; el resto exige https.
+ */
+function jellyfinHostIsPrivate(string $host): bool
+{
+    if (strtolower($host) === 'localhost' || $host === '::1' || preg_match('/^127\./', $host)) {
+        return true;
+    }
+    // 10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12
+    return (bool)preg_match('/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/', $host);
+}
+
+/**
+ * URL de la imagen de un item de Jellyfin para el retro-relleno
+ * de portadas viejas (la API de arte del plugin solo expone la
+ * canción ACTUAL; con esta plantilla se repara cualquier fila
+ * vieja por su itemId de Jellyfin).
+ *
+ * Configuración opcional (api/config.php o entorno):
+ *   QCR_JELLYFIN_IMAGES_URL = https://TU-JELLYFIN/Items/{itemId}/Images/Primary
+ *
+ * Devuelve '' si no hay plantilla configurada, no es válida o el
+ * itemId no es válido. El placeholder {itemId} es OBLIGATORIO.
+ * https:// siempre permitido; http:// solo para hosts privados
+ * (Jellyfin en la red local sin TLS).
+ */
+function jellyfinItemImagesUrl(string $itemId): string
+{
+    $itemId = sanitizeItemId($itemId);
+    $tpl = getenv('QCR_JELLYFIN_IMAGES_URL');
+    if ($tpl === false || trim($tpl) === '') {
+        $tpl = defined('QCR_JELLYFIN_IMAGES_URL_VALUE') ? (string)QCR_JELLYFIN_IMAGES_URL_VALUE : '';
+    }
+    $tpl = trim($tpl);
+    if ($tpl === '' || $itemId === '') {
+        return '';
+    }
+    if (strpos($tpl, '{itemId}') === false) {
+        return '';   // plantilla sin placeholder: configuración inválida
+    }
+    if (!filter_var(str_replace('{itemId}', 'x', $tpl), FILTER_VALIDATE_URL)) {
+        return '';
+    }
+
+    $parts = parse_url($tpl);
+    $scheme = strtolower($parts['scheme'] ?? '');
+    $host = $parts['host'] ?? '';
+    if ($host === '') {
+        return '';
+    }
+    if ($scheme === 'https') {
+        // ok
+    } elseif ($scheme === 'http' && jellyfinHostIsPrivate($host)) {
+        // ok: Jellyfin en la LAN local
+    } else {
+        return '';   // http a host público o esquema raro: rechazado
+    }
+
+    return str_replace('{itemId}', rawurlencode($itemId), $tpl);
+}
+
+/**
+ * Guarda bytes de imagen ya validados como portada de una canción
+ * (escritura atómica: archivo temporal + rename).
+ * Devuelve true si el archivo quedó escrito.
+ */
+function storeCoverBytes(string $artist, string $title, ?string $bytes): bool
+{
+    $artist = trim($artist);
+    $title  = trim($title);
+    if ($artist === '' || $title === '' || !isValidImageBytes($bytes)) {
+        return false;
+    }
+
+    // Crear la carpeta covers/ si falta
+    if (!is_dir(COVERS_DIR) && !@mkdir(COVERS_DIR, 0755, true) && !is_dir(COVERS_DIR)) {
+        return false;
+    }
+
+    $path = coverFilePath($artist, $title);
+
+    // Escritura atómica: archivo temporal + rename
+    $tmp = $path . '.' . getmypid() . '.tmp';
+    if (@file_put_contents($tmp, $bytes, LOCK_EX) === false) {
+        return false;
+    }
+    if (!@rename($tmp, $path)) {
+        @unlink($tmp);
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Garantiza que la portada de la canción esté en caché,
+ * descargándola de una URL concreta (también usada por el
+ * retro-relleno con la plantilla de imágenes de Jellyfin).
+ * Si ya existe NO vuelve a descargarla (idempotente).
+ * Devuelve: 'cached' | 'downloaded' | 'failed'
+ */
+function ensureCoverFromUrl(string $artist, string $title, string $url): string
+{
+    $artist = trim($artist);
+    $title  = trim($title);
+    if ($artist === '' || $title === '' || $url === '') {
+        return 'failed';
+    }
+
+    $path = coverFilePath($artist, $title);
+    if (is_file($path) && filesize($path) > 0) {
+        return 'cached';
+    }
+
+    $bytes = fetchCoverBytes($url);
+    return storeCoverBytes($artist, $title, $bytes) ? 'downloaded' : 'failed';
+}
+
+/**
  * Garantiza que la portada de la canción esté en caché.
  * Si ya existe NO vuelve a descargarla (idempotente).
  *
@@ -158,39 +285,153 @@ function ensureCoverCached(string $artist, string $title, ?string $artworkUrl): 
         return 'cached';
     }
 
-    // Crear la carpeta covers/ si falta
-    if (!is_dir(COVERS_DIR) && !@mkdir(COVERS_DIR, 0755, true) && !is_dir(COVERS_DIR)) {
-        return 'failed';
-    }
-
     $url = buildCoverDownloadUrl($artworkUrl);
     if ($url === '') {
         return 'failed';   // sin URL configurada no hay descarga posible
     }
 
-    $bytes = fetchCoverBytes($url);
+    return ensureCoverFromUrl($artist, $title, $url);
+}
 
-    if (!isValidImageBytes($bytes)) {
-        return 'failed';
+/**
+ * Lee la memoria de intentos de retro-relleno.
+ * Formato: { "clave_cancion": ts_del_último_intento }
+ */
+function readBackfillState(): array
+{
+    if (!is_file(COVERS_BACKFILL_STATE_FILE)) {
+        return [];
+    }
+    $fp = @fopen(COVERS_BACKFILL_STATE_FILE, 'r');
+    if (!$fp) {
+        return [];
+    }
+    @flock($fp, LOCK_SH);
+    $content = stream_get_contents($fp);
+    @flock($fp, LOCK_UN);
+    fclose($fp);
+    $state = json_decode((string)$content, true);
+    return is_array($state) ? $state : [];
+}
+
+/**
+ * Escribe la memoria de intentos (atómica, lock exclusivo).
+ */
+function writeBackfillState(array $state): void
+{
+    $dir = dirname(COVERS_BACKFILL_STATE_FILE);
+    if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+        return;
+    }
+    $fp = @fopen(COVERS_BACKFILL_STATE_FILE, 'c+');
+    if (!$fp) {
+        return;
+    }
+    @flock($fp, LOCK_EX);
+    rewind($fp);
+    ftruncate($fp, 0);
+    fwrite($fp, json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    fflush($fp);
+    @flock($fp, LOCK_UN);
+    fclose($fp);
+}
+
+/**
+ * v1.5 — Retro-relleno de portadas nulas del historial.
+ *
+ * Repara las filas del historial que quedaron con portada
+ * descargando su imagen por itemId desde la plantilla
+ * QCR_JELLYFIN_IMAGES_URL (ver jellyfinItemImagesUrl()).
+ *
+ * Sin esa configuración no hay de dónde bajar arte viejo: las
+ * filas sin itemId (o con la descarga fallida) se reparan por vía
+ * oportunista — cuando la canción vuelve a sonar, el cron de
+ * siempre la reintenta con el arte de la canción actual.
+ *
+ * Memoria de intentos: cada clave fallida espera
+ * COVERS_BACKFILL_RETRY_SECONDS antes de reintentar (un item sin
+ * imagen en Jellyfin no se martilla 1440 veces al día).
+ *
+ * $maxAttempts limita las descargas por invocación (el cron pasa
+ * cada minuto: 2 por pasada es suficiente y suave).
+ * $force ignora el tiempo de espera (uso manual desde maintenance).
+ * Devuelve: ['attempted'=>int, 'downloaded'=>int, 'failed'=>int]
+ */
+function backfillMissingCovers(array $history, int $maxAttempts = 2, bool $force = false): array
+{
+    $result = ['attempted' => 0, 'downloaded' => 0, 'failed' => 0];
+    if ($maxAttempts <= 0 || empty($history)) {
+        return $result;
     }
 
-    // Escritura atómica: archivo temporal + rename
-    $tmp = $path . '.' . getmypid() . '.tmp';
-    if (@file_put_contents($tmp, $bytes, LOCK_EX) === false) {
-        return 'failed';
-    }
-    if (!@rename($tmp, $path)) {
-        @unlink($tmp);
-        return 'failed';
+    $state = readBackfillState();
+    $stateChanged = false;
+    $now = time();
+
+    foreach ($history as $entry) {
+        if ($result['attempted'] >= $maxAttempts) {
+            break;
+        }
+
+        $artist = (string)($entry['artist'] ?? '');
+        $title  = (string)($entry['title'] ?? '');
+        if ($artist === '' || $title === '') {
+            continue;
+        }
+
+        // Solo filas que de verdad carecen de portada en caché
+        $path = coverFilePath($artist, $title);
+        if (is_file($path) && filesize($path) > 0) {
+            continue;
+        }
+
+        $key = songKey($artist, $title);
+
+        // Memoria de intentos: no reintentar demasiado pronto
+        if (!$force && isset($state[$key]) && ($now - (int)$state[$key]) < COVERS_BACKFILL_RETRY_SECONDS) {
+            continue;
+        }
+
+        $url = jellyfinItemImagesUrl((string)($entry['itemId'] ?? ''));
+        if ($url === '') {
+            continue;   // sin itemId o sin plantilla: vía oportunista
+        }
+
+        $state[$key] = $now;
+        $stateChanged = true;
+        $result['attempted']++;
+
+        if (ensureCoverFromUrl($artist, $title, $url) === 'downloaded') {
+            $result['downloaded']++;
+        } else {
+            $result['failed']++;
+        }
     }
 
-    return 'downloaded';
+    if ($stateChanged) {
+        // Poda: solo conservar claves con intento en los últimos 30 días
+        foreach ($state as $k => $ts) {
+            if (!is_int($ts) && !ctype_digit((string)$ts)) {
+                unset($state[$k]);
+            } elseif ((int)$ts < $now - 30 * 86400) {
+                unset($state[$k]);
+            }
+        }
+        writeBackfillState($state);
+    }
+
+    return $result;
 }
 
 /**
  * Recolector: borra las portadas de canciones que YA NO están
  * en el historial (salieron del top 10) y los .tmp huérfanos
  * con más de 1 hora. Devuelve el número de archivos borrados.
+ *
+ * v1.5 — GC endurecido: también elimina
+ *   - archivos con nombre inválido (no es 32 hex + .jpg)
+ *   - .jpg de 0 bytes (incluso si su canción sigue en la lista:
+ *     se re-descargará sola en el siguiente pase)
  */
 function gcCovers(array $history): int
 {
@@ -212,6 +453,9 @@ function gcCovers(array $history): int
     $files   = glob(COVERS_DIR . '/*') ?: [];
 
     foreach ($files as $file) {
+        if (!is_file($file)) {
+            continue;   // ignora subdirectorios
+        }
         $base = basename($file);
 
         // Limpieza de temporales huérfanos (> 1 hora)
@@ -225,10 +469,31 @@ function gcCovers(array $history): int
         }
 
         if (!str_ends_with($base, '.jpg')) {
+            // Restos con cualquier otra extensión: basura, fuera
+            if (@unlink($file)) {
+                $deleted++;
+            }
             continue;
         }
 
         $key = substr($base, 0, -4);
+
+        // Nombre inválido (una portada válida SIEMPRE es md5 de 32 hex)
+        if (!preg_match('/^[0-9a-f]{32}$/', $key)) {
+            if (@unlink($file)) {
+                $deleted++;
+            }
+            continue;
+        }
+
+        // Archivo vacío/corrupto: inútil aunque su clave sea vigente
+        if (@filesize($file) === 0) {
+            if (@unlink($file)) {
+                $deleted++;
+            }
+            continue;
+        }
+
         if (!isset($validKeys[$key]) && @unlink($file)) {
             $deleted++;
         }

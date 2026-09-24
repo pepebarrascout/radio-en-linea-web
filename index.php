@@ -193,6 +193,33 @@
             </div>
             <div id="schedule-rows" class="divide-y divide-gray-200/30 hidden"></div>
           </div>
+
+          <!-- ═══════════ Avisos de programas (push, opt-in voluntario) ═══════════ -->
+          <div id="push-block" class="push-block theme-transition">
+            <button id="push-toggle" class="push-btn" type="button" aria-pressed="false">
+              <i class="fas fa-bell mr-1 text-xs"></i><span id="push-toggle-text">Activar avisos de programas</span>
+            </button>
+            <div id="push-chooser" class="hidden push-chooser">
+              <p class="text-xs text-subtle mb-2">
+                Te avisamos <strong>10 minutos antes</strong> de cada programa. ¿Cuáles quieres recibir?
+              </p>
+              <label class="push-option">
+                <input type="radio" name="qcr-push-mode" value="all" checked>
+                <span>Todos los programas</span>
+              </label>
+              <label class="push-option">
+                <input type="radio" name="qcr-push-mode" value="evening">
+                <span>Solo tarde y noche (desde las 14:00)</span>
+              </label>
+              <div class="flex items-center gap-2 mt-3">
+                <button id="push-accept" class="push-btn push-btn-accept" type="button">
+                  <i class="fas fa-check mr-1 text-xs"></i>Activar
+                </button>
+                <button id="push-cancel" class="push-btn-ghost" type="button">Cancelar</button>
+              </div>
+            </div>
+            <p id="push-hint" class="hidden text-xs text-faint mt-2"></p>
+          </div>
         </section>
 
         <!-- ═══════════ Imagen del estudio ═══════════ -->

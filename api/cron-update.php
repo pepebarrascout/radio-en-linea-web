@@ -237,10 +237,19 @@ if ($registered) {
 // Borra las portadas de canciones que ya salieron del top 10.
 $coversDeleted = gcCovers($history);
 
+// ── Retro-relleno de portadas viejas (v1.5) ───────────────────
+// Repara filas del historial con portada nula usando la plantilla
+// de imágenes de Jellyfin (config opcional QCR_JELLYFIN_IMAGES_URL
+// en config.php; ver README). Máximo 2 descargas por pasada: el
+// cron corre cada minuto, así la reparación es suave y constante.
+// Sin plantilla configurada esta llamada es un no-op barato.
+$backfill = backfillMissingCovers($history, 2);
+
 $log['registered'] = $registered;
 $log['reason']     = $reason;
 $log['cover']      = $coverStatus;
 $log['covers_gc']  = $coversDeleted;
+$log['covers_backfill'] = $backfill;
 $log['song']       = [
     'title'  => $title,
     'artist' => $artist,
@@ -258,6 +267,10 @@ if ($isCli) {
         echo $line . "\n";
         if ($coversDeleted > 0) {
             echo "Portadas fuera del listado borradas: {$coversDeleted}\n";
+        }
+        if ($backfill['attempted'] > 0) {
+            echo "Retro-relleno de portadas: {$backfill['downloaded']} reparadas, "
+               . "{$backfill['failed']} fallidas (de {$backfill['attempted']} intentos)\n";
         }
         echo "Historial actual (" . count($history) . " entradas):\n";
         foreach ($history as $i => $h) {

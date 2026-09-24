@@ -344,3 +344,54 @@ Fecha: 2026-09-15
 - Verificación en navegador real (viewport móvil 390 px, claro y oscuro): márgenes de la barra medidos **16 px arriba / 16 px abajo** (centrada exacta); waveform a 44 px animando con ciclos ≈0.39 s; tras detener, el elemento de audio queda **sin src** (conexión cortada) y las barras planas; al tocar «Viernes» con el hover pegado el botón mantiene `rgb(0,0,128)` con texto blanco.
 - Regresión completa: fase 7 **37/37**, fase 6 **20/20**, integración v2 **50/50**, ciclo **26/26**, HTTP ciclo **23/23**, votos/portadas **29/29**. Total **213 aserciones** verdes. `php -l` + `node --check` limpios.
 - Escaneo: cero tokens de GitHub, cero dominios reales del servidor de la radio y cero token de consumo en el repositorio.
+
+---
+
+# v1.5 — Salud del historial/portadas y avisos push de programas
+
+## 🩺 Historial y portadas (temas 2, 3 y 4 pospuestos)
+
+| Cambio | Detalle |
+|---|---|
+| **Deduplicación robusta del historial** | Antes solo se comparaba contra `history[0]`: el rebote de metadatos A→B→A entre dos registradores (cron 1 min + navegador 10 s) registraba la misma canción DOS veces (caso real: *Sexercize* ×2 con *Three Imaginary Boys* en medio). Ahora `isSamePlayRecent()` escanea TODAS las entradas recientes: si la canción coincide con cualquiera cuya emisión aún no cumple `duración + margen`, es la misma emisión y no se registra. Comparación por clave normalizada (`songKey`, inmune a mayúsculas/espacios) + `itemId` de Jellyfin (manda cuando el título cambia por corrección de metadatos). La repetición GENUINA (tras su duración completa) sigue registrándose como pase nuevo |
+| **Retro-relleno de portadas nulas** | Las filas del historial con `cover:null` ya no quedan huérfanas: si configuras `QCR_JELLYFIN_IMAGES_URL` (plantilla `https://TU-JELLYFIN/Items/{itemId}/Images/Primary`), el cron repara cada fila por su itemId (máx. 2 por minuto; la misma portada espera 6 h entre intentos para no martillar un item sin imagen). Sin plantilla, la vía oportunista de siempre sigue operando: cuando la canción vuelve a sonar, su portada se descarga al instante |
+| **GC de portadas endurecido** | `gcCovers()` también elimina archivos con nombre inválido (una portada válida SIEMPRE es 32 hex + `.jpg`), `.jpg` de 0 bytes (se re-descargan solas) y cualquier resto con otra extensión |
+| **CLI de mantenimiento** | Nuevo `api/maintenance.php`: `covers:audit` (informe sin borrar nada: válidos, inválidos, vacíos, duplicados por contenido y filas sin portada), `covers:clean` (borra inválidas/vacías/.tmp viejos y duplicadas por hash de contenido), `covers:backfill` (fuerza el retro-relleno, `--force` ignora la espera) e `history:dedupe` (colapsa en el propio history.json las emisiones duplicadas del rebote) |
+
+## 🔔 Avisos push de programas (Web Push puro, sin Firebase)
+
+| Cambio | Detalle |
+|---|---|
+| **Mensaje** | «Te invitamos a escuchar «[programa]», que empieza a las [hora]. ¡Te esperamos!» — 10 minutos antes de cada inicio, con enlace que abre la web/PWA y arranca la radio (autoplay mejor esfuerzo; si el navegador lo bloquea, la radio queda lista con el botón de play) |
+| **Fuente de datos** | `programacion.json` — la MISMA parrilla que muestra la web; zona horaria America/Guatemala. Editar la parrilla cambia los avisos sin tocar código |
+| **Arquitectura** | `api/push-lib.php` implementa RFC 8291 (cifrado aes128gcm) + RFC 8292 (VAPID con JWT ES256) en PHP puro con openssl — sin Composer, sin Firebase, sin dependencias. `api/push-subscribe.php` (alta/baja con preferencias), `api/push-config.php` (clave pública), `api/push-trigger.php` (disparador del cron cada minuto + CLI: `--anuncio`, `--test-send`, `--dry-run`, `--generate-keys`) |
+| **El oyente elige** | Botón «🔔 Activar avisos» en el panel de Programación (opt-in voluntario, nunca popups): dos modos — *todos los programas* o *solo tarde y noche (inicio ≥ 14:00)* — guardados por suscriptor en `api/data/subscribers.json`. Cambiar de modo = volver a activar; desactivar = un toque |
+| **Anti-spam por diseño** | Máximo 1 aviso por programa y día (estado idempotente en `api/data/push-state.json`); nunca avisos atrasados (ventana `[inicio−10, inicio)`; si el servidor estuvo caído, se salta); el service worker SILENCIA el aviso si el oyente ya está escuchando (consulta por MessageChannel con tope de 700 ms); las notificaciones no se apilan (mismo `tag`); TTL 300 s (nunca llega un «en 10 minutos» tarde); suscripciones muertas (404/410) se limpian solas; onda completa se reintenta solo si NO llegó nada a nadie (máx. 3) → jamás se duplica un aviso |
+| **Baja en 1 toque** | Botón «Silenciar avisos» dentro de la propia notificación (donde el sistema soporte acciones) + el botón de la web como interruptor activo/inactivo |
+| **Re-suscripción automática** | El service worker gestiona `pushsubscriptionchange` (rotación de suscripción del servicio push) re-suscribiéndose con la clave pública de `push-config.php` |
+| **Compatibilidad** | Android: navegador y PWA. iOS ≥ 16.4: solo con la PWA instalada en pantalla de inicio. Sin soporte, el bloque de avisos ni siquiera se muestra |
+
+## ⚙️ Técnico
+
+| Archivo | Cambio |
+|---|---|
+| `api/history-lib.php` | `isSamePlayAsLast()` → `isSamePlayRecent()` (escaneo completo + `songKey` + `itemId`); `registerSong()` usa la nueva regla |
+| `api/covers-lib.php` | `jellyfinItemImagesUrl()` (plantilla validada; http solo para hosts privados), `storeCoverBytes()` + `ensureCoverFromUrl()` (refactor del guardado atómico), `backfillMissingCovers()` con memoria de intentos en `api/data/backfill-state.json`, `gcCovers()` endurecido |
+| `api/cron-update.php` | Llama al retro-relleno (2 por pasada) y lo reporta en el log/verbose |
+| `api/push-lib.php` (NUEVO) | Web Push completo: claves VAPID (generación y carga), JWT ES256 (DER→raw), HKDF, cifrado aes128gcm, POST con cURL/fallback, almacén de suscriptores compartido; distingue fallo PERMANENTE (`false` → limpiar suscripción) de fallo TRANSITORIO (`null` → reintentar, nunca borrar) |
+| `api/push-config.php` (NUEVO) | Clave pública VAPID para el navegador; 503 si no está configurado (la web oculta el botón) |
+| `api/push-subscribe.php` (NUEVO) | POST (alta/actualización de modo) y DELETE (baja) con validación estricta (endpoint https — http solo loopback/privado para pruebas—, `p256dh` de 65 bytes, `auth` 8–48) y escritura atómica con `flock` |
+| `api/push-trigger.php` (NUEVO) | Disparador cada minuto: ventana de 10 minutos, estado del día, filtro por preferencia, ondas de envío con limpieza, CLI completa y log en `api/data/push-trigger.log` |
+| `api/maintenance.php` (NUEVO) | CLI de mantenimiento (audit/clean/backfill/dedupe), solo por CLI |
+| `api/config.example.php` | Nuevas claves documentadas: `QCR_JELLYFIN_IMAGES_URL_VALUE`, `QCR_VAPID_PUBLIC_KEY_VALUE`, `QCR_VAPID_PRIVATE_PEM_VALUE`, `QCR_VAPID_SUBJECT_VALUE` |
+| `sw.js` | `CACHE_NAME` → `qcr-static-v8`; handlers `push` (con silencio si ya escucha), `notificationclick` (abrir/re-enfocar + autoplay, y acción de silenciar) y `pushsubscriptionchange` |
+| `assets/js/app.js` | Flujo de suscripción completo (`bindPush`, `subscribePush`, `unsubscribePush`, `refreshPushUi`), reporte del estado del reproductor al SW (`notifySwPlayState`), respuestas a consultas del SW y autoplay (`tryAutoplay`, `?autoplay=1`, mensaje `qcr-autoplay`) |
+| `index.php` / `assets/css/app.css` | Bloque de avisos en el panel de Programación (botón + selector de alcance + pista) con estilos propios (claro/oscuro) |
+
+## 🧪 Verificación (v1.5)
+
+- Nueva suite `scripts/test-pkg-historial.php`: **39/39** (rebote A→B→A, repetición genuina, itemId, normalización, retro-relleno con servidor de imágenes real + memoria de intentos, GC endurecido, CLI completa).
+- Nueva suite `scripts/test-push.php`: **35/35** end-to-end con servicio push simulado (claves VAPID reales, JWT ES256 verificado contra la pública, cifrado aes128gcm descifrado byte a byte de forma independiente, endpoints de suscripción, ventana de 10 min, idempotencia, limpieza de suscripciones muertas, cabeceras `Authorization: vapid t=…,k=…` + `TTL: 300` + `Content-Encoding: aes128gcm` recibidas por el servicio, aviso manual y prueba).
+- Nueva suite `scripts/test-fase9.sh`: **27 grupos** (lint, estructura SW/HTML/JS/CSS/PHP, ambas suites y escaneo anti-secretos).
+- Regresión completa: historial **16/16**, votos/portadas **29/29**, consumo **26/26**, HTTP consumo **23/23**, smoke fase 5 **5/5**, fase 6 **20/20**, fase 7 **37/37**, fase 8 **28/28** (SW v8+), integración v1 **17/17**, integración v2 **50/50**. Total **~325 aserciones** verdes. `php -l` y `node --check` limpios.
+- Escaneo: cero tokens de GitHub, cero dominios reales del servidor de la radio, cero claves privadas en el repositorio.

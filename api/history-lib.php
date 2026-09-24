@@ -117,40 +117,84 @@ function durationToSeconds(?string $duration): int
 }
 
 /**
- * Decide si la canción entrante ES LA MISMA EMISIÓN que la última
- * registrada (no duplicar) o es un pase nuevo (registrar).
+ * Decide si la canción entrante ES LA MISMA EMISIÓN que ALGUNA de
+ * las entradas recientes del historial (no duplicar) o es un pase
+ * nuevo (registrar).
  *
- * Reglas:
- *  - Coincide título+artista con history[0] Y no ha pasado su
- *    duración (+ margen) → misma emisión → NO registrar.
+ * v1.5 — Deduplicación robusta contra el rebote de metadatos.
+ *
+ * Antes solo se comparaba contra history[0]: si los metadatos
+ * rebotaban A→B→A entre dos registradores (cron + navegador), al
+ * volver A el último era B y A se registraba DOS veces.
+ *
+ * Reglas (aplicadas a TODAS las entradas recientes):
+ *  - Coincide (clave normalizada de artista|título, o itemId de
+ *    Jellyfin) con una entrada cuya emisión aún no cumple su
+ *    duración + margen → misma emisión → NO registrar.
  *  - Coincide pero YA PASÓ su duración → la playlist la repitió
  *    → SÍ registrar como nuevo pase.
+ *
+ * La comparación por texto usa songKey() (normalizada: minúsculas,
+ * sin espacios en extremos), inmune a diferencias de mayúsculas
+ * o variantes de espaciado entre registradores. El itemId de
+ * Jellyfin manda cuando los textos difieren (correcciones de
+ * metadatos de la misma canción).
  */
-function isSamePlayAsLast(array $lastEntry, string $title, string $artist): bool
+function isSamePlayRecent(array $history, string $title, string $artist, string $itemId = ''): bool
 {
-    if (empty($lastEntry) || !isset($lastEntry['title'], $lastEntry['artist'])) {
+    if (empty($history)) {
         return false;
     }
 
-    if ($lastEntry['title'] !== $title || $lastEntry['artist'] !== $artist) {
+    $title = trim($title);
+    $artist = trim($artist);
+    if ($title === '' || $artist === '') {
         return false;
     }
 
-    $ts = isset($lastEntry['ts']) ? (int)$lastEntry['ts'] : 0;
-    if ($ts <= 0) {
-        // Entrada antigua sin ts (creada por la versión anterior):
-        // comportamiento clásico → tratar como misma emisión.
-        return true;
+    $key = songKey($artist, $title);
+    $itemId = sanitizeItemId($itemId);
+    $now = time();
+
+    foreach ($history as $entry) {
+        $entryArtist = (string)($entry['artist'] ?? '');
+        $entryTitle  = (string)($entry['title'] ?? '');
+        if ($entryArtist === '' || $entryTitle === '') {
+            continue;
+        }
+
+        $matches = songKey($entryArtist, $entryTitle) === $key;
+        if (!$matches && $itemId !== '') {
+            $entryItemId = (string)($entry['itemId'] ?? '');
+            $matches = $entryItemId !== '' && $entryItemId === $itemId;
+        }
+        if (!$matches) {
+            continue;
+        }
+
+        $ts = isset($entry['ts']) ? (int)$entry['ts'] : 0;
+        if ($ts <= 0) {
+            // Entrada antigua sin ts (creada por la versión anterior):
+            // comportamiento clásico → tratar como misma emisión.
+            return true;
+        }
+
+        $elapsed = $now - $ts;
+
+        $durationSec = durationToSeconds((string)($entry['duration'] ?? ''));
+        if ($durationSec <= 0) {
+            $durationSec = DEFAULT_MAX_DURATION_SECONDS;
+        }
+
+        if ($elapsed < ($durationSec + DURATION_MARGIN_SECONDS)) {
+            // La emisión original seguiría en curso (o apenas terminó):
+            // cualquier re-aparición dentro de esta ventana es el rebote
+            // de metadatos, no un pase nuevo.
+            return true;
+        }
     }
 
-    $elapsed = time() - $ts;
-
-    $durationSec = durationToSeconds($lastEntry['duration'] ?? '');
-    if ($durationSec <= 0) {
-        $durationSec = DEFAULT_MAX_DURATION_SECONDS;
-    }
-
-    return $elapsed < ($durationSec + DURATION_MARGIN_SECONDS);
+    return false;
 }
 
 /**
@@ -195,8 +239,11 @@ function registerSong(array $song): array
     $history = json_decode((string)$content, true);
     $history = is_array($history) ? $history : [];
 
-    // ¿Es la misma emisión que la última registrada?
-    if (!empty($history) && isSamePlayAsLast($history[0], $title, $artist)) {
+    // ¿Es la misma emisión que alguna entrada reciente?
+    // (deduplicación robusta: escanea todo el historial visible,
+    // no solo la última — v1.5)
+    if (!empty($history)
+        && isSamePlayRecent($history, $title, $artist, (string)($song['itemId'] ?? ''))) {
         flock($fp, LOCK_UN);
         fclose($fp);
         return [false, $history, 'already_recorded'];

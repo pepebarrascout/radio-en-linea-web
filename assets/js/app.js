@@ -27,6 +27,8 @@
   var HISTORY_API_URL = './api/history.php';
   var VOTES_API_URL = './api/vote.php';
   var ARTWORK_FALLBACK_URL = './api/artwork.php';
+  var PUSH_CONFIG_URL = './api/push-config.php';
+  var PUSH_SUBSCRIBE_URL = './api/push-subscribe.php';
   var PLACEHOLDER_TITLE = 'Esperando transmisión...';
 
   var DEFAULT_NOW_PLAYING = {
@@ -798,6 +800,9 @@
     // Waveform decorativa: animada mientras suena, plana en pausa
     var wf = $('waveform');
     if (wf) wf.classList.toggle('playing', state.isPlaying);
+    // v1.5: el service worker necesita saber si suena (para silenciar
+    // los avisos push de programas mientras el oyente ya escucha)
+    notifySwPlayState();
   }
 
   // ── Waveform decorativa ──────────────────────────────────────
@@ -896,6 +901,239 @@
         console.error('Error registrando el service worker:', err);
       });
     });
+  }
+
+  // ── Avisos push de programas (v1.5, opt-in voluntario) ──
+  // Anti-spam por diseño: nada de popups ni permisos en la primera
+  // visita — el botón vive en el panel de Programación, el oyente
+  // elige qué avisos quiere (todos, o solo tarde y noche), puede
+  // desactivarse con un toque (aquí o en la propia notificación)
+  // y si el oyente ya está escuchando, el aviso se silencia solo.
+  var pushVapidKey = '';
+
+  function pushSupported() {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+
+  function urlB64ToUint8Array(base64String) {
+    var padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    var base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    var raw = window.atob(base64);
+    var output = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i += 1) {
+      output[i] = raw.charCodeAt(i);
+    }
+    return output;
+  }
+
+  function pushHint(text) {
+    var hint = $('push-hint');
+    if (!hint) return;
+    hint.textContent = text || '';
+    hint.classList.toggle('hidden', !text);
+  }
+
+  function updatePushToggle(text, active, disabled) {
+    var btn = $('push-toggle');
+    var label = $('push-toggle-text');
+    if (!btn || !label) return;
+    label.textContent = text;
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    btn.classList.toggle('push-btn-active', active);
+    if (disabled) {
+      btn.setAttribute('disabled', 'disabled');
+    } else {
+      btn.removeAttribute('disabled');
+    }
+  }
+
+  /** Sincroniza el botón con el estado REAL (suscripción + permiso). */
+  function refreshPushUi() {
+    if (!pushSupported()) return;
+    var chooser = $('push-chooser');
+
+    navigator.serviceWorker.ready.then(function (registration) {
+      return registration.pushManager.getSubscription();
+    }).then(function (subscription) {
+      if (chooser) chooser.classList.add('hidden');
+
+      if (subscription) {
+        updatePushToggle('Avisos activados — tocar para desactivar', true, false);
+        pushHint('');
+        return;
+      }
+      if (Notification.permission === 'denied') {
+        updatePushToggle('Avisos bloqueados en el navegador', false, false);
+        return;
+      }
+      updatePushToggle('Activar avisos de programas', false, false);
+    }).catch(function () {
+      updatePushToggle('Activar avisos de programas', false, false);
+    });
+  }
+
+  /** Baja limpia: borra la suscripción aquí y en el servidor. */
+  function unsubscribePush() {
+    navigator.serviceWorker.ready.then(function (registration) {
+      return registration.pushManager.getSubscription();
+    }).then(function (subscription) {
+      if (!subscription) return;
+      return fetch(PUSH_SUBSCRIBE_URL, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: subscription.endpoint }),
+      }).catch(function () { /* la suscripción local manda */ })
+        .then(function () { return subscription.unsubscribe(); });
+    }).then(function () {
+      refreshPushUi();
+    }).catch(function (err) {
+      console.error('Error desactivando avisos:', err);
+    });
+  }
+
+  /** Suscribe con el modo elegido y guarda las preferencias. */
+  function subscribePush(mode) {
+    var accept = $('push-accept');
+    if (accept) accept.setAttribute('disabled', 'disabled');
+
+    var haveKey = pushVapidKey
+      ? Promise.resolve()
+      : fetch(PUSH_CONFIG_URL, { cache: 'no-store' })
+          .then(function (r) { if (!r.ok) throw new Error('push HTTP ' + r.status); return r.json(); })
+          .then(function (cfg) {
+            if (!cfg.publicKey) throw new Error('push sin claves');
+            pushVapidKey = cfg.publicKey;
+          });
+
+    haveKey.then(function () {
+      return Notification.requestPermission().then(function (permission) {
+        if (permission !== 'granted') {
+          pushHint('Permiso denegado: los avisos quedaron desactivados.');
+          refreshPushUi();
+          return;
+        }
+        return navigator.serviceWorker.ready.then(function (registration) {
+          return registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlB64ToUint8Array(pushVapidKey),
+          });
+        }).then(function (subscription) {
+          var json = subscription.toJSON();
+          return fetch(PUSH_SUBSCRIBE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              endpoint: subscription.endpoint,
+              keys: json.keys || {},
+              prefs: { mode: mode },
+            }),
+          });
+        }).then(function () {
+          refreshPushUi();
+        });
+      });
+    }).catch(function (err) {
+      console.error('Error activando avisos:', err);
+      pushHint('No se pudo activar en este momento. Inténtalo más tarde.');
+      refreshPushUi();
+    }).then(function () {
+      if (accept) accept.removeAttribute('disabled');
+    });
+  }
+
+  function bindPush() {
+    var block = $('push-block');
+    if (!block) return;
+
+    // Sin soporte (o iOS sin PWA instalada): ni mostrar el bloque
+    if (!pushSupported()) {
+      block.classList.add('hidden');
+      return;
+    }
+    // Solo https/localhost (requisito de push)
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      block.classList.add('hidden');
+      return;
+    }
+
+    var toggle = $('push-toggle');
+    var chooser = $('push-chooser');
+    var accept = $('push-accept');
+    var cancel = $('push-cancel');
+
+    if (toggle) {
+      toggle.addEventListener('click', function () {
+        if (toggle.hasAttribute('disabled')) return;
+        navigator.serviceWorker.ready.then(function (registration) {
+          return registration.pushManager.getSubscription();
+        }).then(function (subscription) {
+          if (subscription) {
+            // Activado → baja en 1 toque (sin confirmaciones molestas)
+            unsubscribePush();
+            return;
+          }
+          if (Notification.permission === 'denied') {
+            pushHint('Los avisos están bloqueados: desbloquéalos en el candado/icono del sitio.');
+            return;
+          }
+          if (chooser) chooser.classList.toggle('hidden');
+        }).catch(function (err) {
+          console.error('Error consultando suscripción:', err);
+        });
+      });
+    }
+
+    if (accept) {
+      accept.addEventListener('click', function () {
+        var checked = document.querySelector('input[name="qcr-push-mode"]:checked');
+        subscribePush(checked ? checked.value : 'all');
+      });
+    }
+    if (cancel && chooser) {
+      cancel.addEventListener('click', function () {
+        chooser.classList.add('hidden');
+        pushHint('');
+      });
+    }
+
+    refreshPushUi();
+  }
+
+  /** Avisa al SW del estado del reproductor (regla «si ya escucha, silencio»). */
+  function notifySwPlayState() {
+    if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+    try {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'qcr-status',
+        playing: state.isPlaying === true,
+      });
+    } catch (e) { /* SW aún no controla la página */ }
+  }
+
+  /** Autoplay best-effort (clic en notificación). Si el navegador lo
+   *  bloquea, la radio queda lista con el botón de play. */
+  function tryAutoplay() {
+    if (state.isPlaying) return;
+    startStream();   // startStream ya captura el rechazo de play()
+  }
+
+  /** Mensajes del service worker: consulta de estado y autoplay. */
+  function bindSwMessages() {
+    if (!('serviceWorker' in navigator)) return;
+
+    navigator.serviceWorker.addEventListener('message', function (event) {
+      var data = event.data || {};
+      if (data.type === 'qcr-status-query' && event.ports && event.ports[0]) {
+        try {
+          event.ports[0].postMessage({ type: 'qcr-status', playing: state.isPlaying === true });
+        } catch (e) { /* puerto cerrado */ }
+      } else if (data.type === 'qcr-autoplay') {
+        tryAutoplay();
+      }
+    });
+
+    // Cuando el SW toma el control tras una actualización, reportar de nuevo
+    navigator.serviceWorker.addEventListener('controllerchange', notifySwPlayState);
   }
 
   // ── Instalación de la app (PWA) ──────────────────────────
@@ -1001,7 +1239,18 @@
     showPlayerLoading(true);
     bindEvents();
     bindInstall();
+    bindSwMessages();
+    bindPush();
     registerServiceWorker();
+
+    // v1.5: llegada desde una notificación (clic = abrir y reproducir).
+    // Mejor esfuerzo: si el navegador bloquea el arranque automático,
+    // la radio queda lista con el botón de play bien visible.
+    try {
+      if (new URLSearchParams(location.search).has('autoplay')) {
+        setTimeout(tryAutoplay, 600);
+      }
+    } catch (e) { /* navegador sin URLSearchParams */ }
 
     loadHistory();
     loadSchedule();

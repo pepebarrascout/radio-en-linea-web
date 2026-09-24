@@ -33,8 +33,10 @@
 | 🛡️ **Sin dominios expuestos** | El navegador solo habla con tu hosting (proxys de NowPlaying y portadas); el dominio del servidor de la radio nunca aparece en el código ni en la red del cliente |
 | 🔒 **Privacidad** | Los conteos nunca son públicos; los votantes nunca se exponen |
 | 📲 **PWA instalable** | Manifest + service worker + banner de instalación con detección Android/iOS |
+| 🔔 **Avisos de programas** | Notificación push 10 minutos antes de cada programa (Web Push + VAPID, sin Firebase). El oyente elige si quiere todos o solo tarde y noche; silencio automático si ya está escuchando y baja en 1 toque |
 | 🌗 **Tema claro/oscuro** | Persistente, aplicado antes de pintar (sin destellos) |
 | 📱 **Media Session** | Portada y metadatos en la pantalla de bloqueo del móvil |
+| 🧹 **Mantenimiento** | CLI `api/maintenance.php`: auditoría/limpieza de portadas, retro-relleno por itemId y deduplicación del historial |
 
 ---
 
@@ -130,7 +132,40 @@ Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y b
 | `index.php` | Textos, estructura del header/footer/hero, fuentes (Google Fonts) y el stream (`<audio src="https://tu-dominio.com/radio">`) |
 | `assets/css/app.css` | Todos los estilos: paleta de colores (variables al inicio del archivo), tipografías, botones, tarjetas, tema claro/oscuro. Bloques propios al final: banner de instalación, `.waveform` (colores y animación de las barras), `.song-progress-*` (barra de progreso) y el azul del día marcado bajo hover (`.tab-btn.tab-selected:hover`) |
 | `assets/js/app.js` | Bloque de configuración al inicio (URLs locales, stream) + render dinámico: filas de programación (`renderSchedule`), íconos de programas (`getProgramIcon`), historial (`renderHistory`), barras de la waveform (`initWaveform`: número y tamaño), progreso (`renderProgress`) y centrado de días (`centerDayTab`) |
-| `api/config.php` | URL del servidor de la radio, token de consumo y clave HTTP del cron |
+| `api/config.php` | URL del servidor de la radio, token de consumo, clave HTTP del cron, plantilla de imágenes Jellyfin y claves VAPID |
+
+### Paso 5: Retro-relleno de portadas por itemId (opcional)
+
+La API de arte del plugin solo expone la portada de la canción que suena AHORA. Si una fila del historial quedó con portada nula (p. ej. por una falla momentánea), con esta plantilla el cron la repara sola por el itemId de Jellyfin, sin esperar a que la canción vuelva a sonar:
+
+```bash
+nano api/config.php
+define('QCR_JELLYFIN_IMAGES_URL_VALUE', 'https://TU-JELLYFIN/Items/{itemId}/Images/Primary');
+```
+
+- El placeholder `{itemId}` es obligatorio; debe ser https (o http si tu Jellyfin está en la red local: 192.168.x.x, 10.x.x.x…)
+- Sin plantilla el retro-relleno queda deshabilitado y las portadas se reparan por la vía oportunista (cuando la canción repite)
+- Máximo 2 reparaciones por minuto y 6 horas de espera entre intentos de la misma portada: un item sin imagen nunca se martilla
+- Diagnóstico manual: `php api/maintenance.php covers:audit` y `php api/maintenance.php covers:backfill`
+
+### Paso 6: Avisos push de programas (opcional)
+
+Notificación «En 10 minutos empieza…» con Web Push estándar (VAPID + cifrado aes128gcm, 100% PHP, sin Firebase ni Composer):
+
+```bash
+# 1) Genera las claves VAPID UNA vez y pégalas en api/config.php:
+php api/push-trigger.php --generate-keys
+
+# 2) Añade UNA línea más al cron (cada minuto):
+#    * * * * * php /home/USUARIO/public_html/qc/api/push-trigger.php >/dev/null 2>&1
+```
+
+- La fuente de datos es `programacion.json`: si editas la parrilla, los avisos la siguen; zona horaria America/Guatemala
+- Anti-spam por diseño: el oyente se suscribe VOLUNTARIAMENTE desde el panel de Programación (botón «🔔 Activar avisos»), elige **todos los programas** o **solo tarde y noche (≥14:00)**, hay máximo 1 aviso por programa y día, nunca avisos atrasados, no se apilan (mismo tag), el aviso se silencia si el oyente ya está escuchando y la baja es en 1 toque (botón en la web o «Silenciar avisos» dentro de la propia notificación)
+- Al tocar la notificación se abre la web/PWA y arranca la radio (si el navegador bloquea el autoplay, queda lista con el botón de play)
+- Pruebas: `php api/push-trigger.php --test-send` (a todos) y `--anuncio="Texto libre"` (aviso importante manual, también a todos); `--dry-run` muestra qué enviaría sin enviar
+- Las suscripciones muertas (404/410) se limpian solas; almacenadas en `api/data/subscribers.json` (carpeta protegida, sin acceso web)
+- iOS: los avisos requieren la PWA instalada en pantalla de inicio (iOS ≥ 16.4); en Android funcionan en el navegador y en la PWA
 
 ---
 
