@@ -363,6 +363,64 @@ function pushHttpPost(string $url, array $headers, string $body, int $timeout = 
     return [$code, null];
 }
 
+// ── Preferencias de avisos (v0.1.6) ──────────────────────────
+//
+// El oyente elige una FRANJA horaria y solo recibe avisos de
+// programas que EMPIEZAN dentro de ella (hora de inicio, zona
+// horaria America/Guatemala):
+//
+//    all       → todos los programas (cualquier hora)
+//    morning   → solo mañana    06:00 ≤ inicio < 14:00
+//    afternoon → solo tarde     14:00 ≤ inicio < 21:00
+//    day       → todo el día    06:00 ≤ inicio < 21:00
+//
+// Compatibilidad: las suscripciones hechas con v0.1.4/v0.1.5
+// guardaron el modo "evening" (inicio ≥ 14:00 sin tope). Se
+// sigue ACEPTANDO y se interpreta como "afternoon".
+
+/** Modos válidos una vez normalizado el payload. */
+const PUSH_MODES = ['all', 'morning', 'afternoon', 'day'];
+
+/** Inicio de la franja mañana (minutos desde medianoche, incluido). */
+const PUSH_MORNING_START = 6 * 60;   // 06:00
+
+/** Fin de la franja mañana / inicio de la tarde (exclusivo). */
+const PUSH_MORNING_END = 14 * 60;    // 14:00
+
+/** Fin de la franja día/tarde (exclusivo). */
+const PUSH_DAY_END = 21 * 60;        // 21:00
+
+/**
+ * Normaliza el modo recibido: minúsculas y alias legados.
+ * "evening" (v0.1.4/v0.1.5) se convierte en "afternoon".
+ */
+function pushNormalizeMode(string $mode): string
+{
+    $mode = pushLower($mode);
+    return $mode === 'evening' ? 'afternoon' : $mode;
+}
+
+/**
+ * ¿Este suscriptor debe recibir el aviso de este programa según
+ * su preferencia? La ventana se evalúa sobre la HORA DE INICIO
+ * del programa. Modos desconocidos se tratan como "all".
+ */
+function pushModeAllows(array $subscriber, int $startMin): bool
+{
+    $mode = pushNormalizeMode((string)($subscriber['mode'] ?? 'all'));
+    switch ($mode) {
+        case 'morning':
+            return $startMin >= PUSH_MORNING_START && $startMin < PUSH_MORNING_END;
+        case 'afternoon':
+            return $startMin >= PUSH_MORNING_END && $startMin < PUSH_DAY_END;
+        case 'day':
+            return $startMin >= PUSH_MORNING_START && $startMin < PUSH_DAY_END;
+        case 'all':
+        default:
+            return true;
+    }
+}
+
 // ── Almacén de suscriptores (compartido) ─────────────────────
 
 /** Ruta del almacén de suscriptores (carpeta data/, protegida). */

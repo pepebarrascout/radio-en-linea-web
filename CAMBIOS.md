@@ -414,3 +414,23 @@ Fecha: 2026-09-15
 - `php -l` limpio en los PHP tocados y `node --check` en `app.js`/`sw.js`.
 - Suite fase 9 (27 grupos) actualizada a `qcr-static-v9` y en verde.
 - Verificación EN VIVO contra producción (navegador limpio): el botón se muestra con su estilo (fondo navy, píldora, fuente Inter) y al pulsarlo se despliega el selector «todos / tarde y noche».
+
+---
+
+# v0.1.6 — Franjas de avisos a medida y documentación de producción
+
+## 🎯 Qué se agrega/corrige (tras verificar el push en producción)
+
+| Cambio | Detalle |
+|---|---|
+| **4 franjas de avisos** | El selector «🔔 Activar avisos» ahora ofrece: **Todos los programas** · **Solo mañana** (06:00 a 14:00) · **Solo tarde** (14:00 a 21:00) · **Todo el día** (06:00 a 21:00). La franja se evalúa sobre la hora de INICIO del programa y vive en `push-lib.php` (compartida por el endpoint de suscripción y el disparador) |
+| **Compatibilidad con suscriptores antiguos** | El modo legado `evening` (v0.1.4/v0.1.5, «tarde y noche ≥14:00») se sigue aceptando y se guarda ya normalizado como `afternoon`: nadie pierde sus avisos al actualizar |
+| **Suscripción con respuesta verificada** | `app.js` ya no da por bueno el POST de suscripción sin mirar la respuesta: si el servidor responde 500 (p. ej. `subscribers.json` sin crear), se muestra un error accionable en lugar del engañoso «Avisos activados». Al activar bien, se confirma la franja elegida |
+| **Documentación de producción** | README alineado con la ruta real (raíz `~/public_html/`), sección nueva «Archivos de datos y permisos» (creación manual de `subscribers.json`, `history.json`, `votes.json`… cuando el usuario de PHP no puede crear archivos) y guía completa de avisos manuales (`--anuncio`, `--test-send`, `--dry-run`, `--verbose`) |
+| **Caché del SW** | `qcr-static-v9` → `qcr-static-v10` |
+
+## 🧪 Verificación (v0.1.6)
+
+- Suite push end-to-end ampliada a **47 aserciones** (franjas: límites 06:00/14:00/21:00, alias `evening`→`afternoon`, modo inválido → 400, modo guardado normalizado, onda determinista a cualquier hora).
+- Fase 9: **29/29 grupos** (2 checks nuevos de franjas); fase 7 y 8 actualizadas al patrón de caché v10+.
+- Regresión completa en verde: historial 16+39, votos/portadas 29, consumo 26+23, smoke 5, fase 6 20, fase 7 37, fase 8 28, integración v1 17 y v2 50 (~330 aserciones). `php -l` y `node --check` limpios.

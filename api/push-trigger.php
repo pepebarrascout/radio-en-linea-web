@@ -3,10 +3,10 @@
  * ============================================================
  *  Que Chilero Radio — Disparador de avisos push de programas
  * ============================================================
- *  v0.1.4 — Corre en el SERVIDOR cada minuto vía cron y envía el
+ *  v0.1.6 — Corre en el SERVIDOR cada minuto vía cron y envía el
  *  aviso «En 10 minutos empieza…» a los suscriptores:
  *
- *      * * * * * php /ruta/a/tu-web/api/push-trigger.php >/dev/null 2>&1
+ *      * * * * * php /home/USUARIO/public_html/api/push-trigger.php >/dev/null 2>&1
  *
  *  Fuente de datos: programacion.json (la MISMA parrilla que
  *  muestra la web; zona horaria America/Guatemala).
@@ -20,8 +20,10 @@
  *     (TTL: 300 s); solo se re-intenta la ONDA COMPLETA si no
  *     llegó nada a nadie (máx. 3) para nunca duplicar avisos
  *   - suscripciones muertas (404/410) se limpian solas
- *   - preferencias por suscriptor: "all" (todos) o "evening"
- *     (solo programas que empiezan desde las 14:00)
+ *   - preferencias por suscriptor (franja según la HORA DE INICIO
+ *     del programa): "all" todos · "morning" 06:00–14:00 ·
+ *     "afternoon" 14:00–21:00 · "day" 06:00–21:00; el modo legado
+ *     "evening" se interpreta como "afternoon"
  *
  *  Comandos CLI:
  *      php push-trigger.php                          → ciclo normal
@@ -53,8 +55,8 @@ define('CRON_SECRET_KEY', getenv('QCR_CRON_SECRET')
 // Minutos de antelación del aviso (10 por defecto)
 define('PUSH_LEAD_MINUTES', max(1, (int)(getenv('QCR_PUSH_LEAD_MINUTES') ?: 10)));
 
-// Modo "evening": solo programas que empiezan desde esta hora
-define('PUSH_EVENING_START_MINUTES', 14 * 60);
+// Modo "evening" (legado) y ventanas horarias viven en push-lib.php
+// (PUSH_MORNING_START/END, PUSH_DAY_END, pushModeAllows).
 
 // Máximo de ondas completas si NUNCA llegó nada (error de red del hosting)
 define('PUSH_MAX_WAVE_ATTEMPTS', 3);
@@ -215,16 +217,6 @@ function computeDuePrograms(array $schedule, array $sentMap, int $nowTs, int $le
     }
 
     return $due;
-}
-
-/**
- * ¿Este suscriptor debe recibir el aviso de este programa según su
- * preferencia? ("all" = todos; "evening" = inicio ≥ 14:00)
- */
-function pushModeAllows(array $subscriber, int $startMin): bool
-{
-    return ($subscriber['mode'] ?? 'all') !== 'evening'
-        || $startMin >= PUSH_EVENING_START_MINUTES;
 }
 
 /** Log de una línea al archivo acumulativo. */

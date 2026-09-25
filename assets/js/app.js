@@ -915,13 +915,21 @@
     });
   }
 
-  // ── Avisos push de programas (v0.1.4, opt-in voluntario) ──
+  // ── Avisos push de programas (v0.1.6, opt-in voluntario) ──
   // Anti-spam por diseño: nada de popups ni permisos en la primera
   // visita — el botón vive en el panel de Programación, el oyente
-  // elige qué avisos quiere (todos, o solo tarde y noche), puede
-  // desactivarse con un toque (aquí o en la propia notificación)
+  // elige su franja (todos · mañana 06–14 · tarde 14–21 · día 06–21),
+  // puede desactivarse con un toque (aquí o en la propia notificación)
   // y si el oyente ya está escuchando, el aviso se silencia solo.
   var pushVapidKey = '';
+
+  // Texto de cada franja para el mensaje de confirmación
+  var PUSH_MODE_LABELS = {
+    all: 'todos los programas',
+    morning: 'solo mañana (06:00 a 14:00)',
+    afternoon: 'solo tarde (14:00 a 21:00)',
+    day: 'todo el día (06:00 a 21:00)',
+  };
 
   function pushSupported() {
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -959,8 +967,9 @@
     }
   }
 
-  /** Sincroniza el botón con el estado REAL (suscripción + permiso). */
-  function refreshPushUi() {
+  /** Sincroniza el botón con el estado REAL (suscripción + permiso).
+   *  keepHint: true para no borrar un mensaje recién puesto. */
+  function refreshPushUi(keepHint) {
     if (!pushSupported()) return;
     var chooser = $('push-chooser');
 
@@ -971,7 +980,7 @@
 
       if (subscription) {
         updatePushToggle('Avisos activados — tocar para desactivar', true, false);
-        pushHint('');
+        if (!keepHint) pushHint('');
         return;
       }
       if (Notification.permission === 'denied') {
@@ -1039,14 +1048,37 @@
               keys: json.keys || {},
               prefs: { mode: mode },
             }),
+          }).then(function (resp) {
+            // v0.1.6: el POST ya no se da por bueno sin mirar la
+            // respuesta — un 500 (p. ej. subscribers.json sin crear)
+            // antes se mostraba como «Avisos activados» en silencio
+            if (!resp.ok) {
+              throw new Error('push-subscribe HTTP ' + resp.status);
+            }
+            return resp.json().catch(function () { return {}; });
           });
-        }).then(function () {
-          refreshPushUi();
+        }).then(function (data) {
+          refreshPushUi(true);
+          if (data && data.ok) {
+            pushHint('Avisos activados: ' + (PUSH_MODE_LABELS[mode] || mode) + '.');
+          } else {
+            pushHint('');
+          }
         });
       });
     }).catch(function (err) {
       console.error('Error activando avisos:', err);
-      pushHint('No se pudo activar en este momento. Inténtalo más tarde.');
+      var msg = err && err.message ? String(err.message) : '';
+      var m = msg.match(/push-subscribe HTTP (\d{3})/);
+      if (m) {
+        if (m[1].charAt(0) === '5') {
+          pushHint('No se pudieron guardar los avisos (error interno del servidor). Revisa «Solución de problemas» en el README.');
+        } else {
+          pushHint('El servidor rechazó la suscripción (HTTP ' + m[1] + ').');
+        }
+      } else {
+        pushHint('No se pudo activar en este momento. Inténtalo más tarde.');
+      }
       refreshPushUi();
     }).then(function () {
       if (accept) accept.removeAttribute('disabled');

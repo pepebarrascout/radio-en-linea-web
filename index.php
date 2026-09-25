@@ -200,8 +200,16 @@
                 <span>Todos los programas</span>
               </label>
               <label class="push-option">
-                <input type="radio" name="qcr-push-mode" value="evening">
-                <span>Solo tarde y noche (desde las 14:00)</span>
+                <input type="radio" name="qcr-push-mode" value="morning">
+                <span>Solo mañana (06:00 a 14:00)</span>
+              </label>
+              <label class="push-option">
+                <input type="radio" name="qcr-push-mode" value="afternoon">
+                <span>Solo tarde (14:00 a 21:00)</span>
+              </label>
+              <label class="push-option">
+                <input type="radio" name="qcr-push-mode" value="day">
+                <span>Todo el día (06:00 a 21:00)</span>
               </label>
               <div class="flex items-center gap-2 mt-3">
                 <button id="push-accept" class="push-btn push-btn-accept" type="button">

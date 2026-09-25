@@ -33,7 +33,7 @@
 | 🛡️ **Sin dominios expuestos** | El navegador solo habla con tu hosting (proxys de NowPlaying y portadas); el dominio del servidor de la radio nunca aparece en el código ni en la red del cliente |
 | 🔒 **Privacidad** | Los conteos nunca son públicos; los votantes nunca se exponen |
 | 📲 **PWA instalable** | Manifest + service worker + banner de instalación con detección Android/iOS |
-| 🔔 **Avisos de programas** | Notificación push 10 minutos antes de cada programa (Web Push + VAPID, sin Firebase). El oyente elige si quiere todos o solo tarde y noche; silencio automático si ya está escuchando y baja en 1 toque |
+| 🔔 **Avisos de programas** | Notificación push 10 minutos antes de cada programa (Web Push + VAPID, sin Firebase). El oyente elige su franja: **todos los programas**, **solo mañana** (06:00–14:00), **solo tarde** (14:00–21:00) o **todo el día** (06:00–21:00); silencio automático si ya está escuchando y baja en 1 toque |
 | 🌗 **Tema claro/oscuro** | Persistente, aplicado antes de pintar (sin destellos) |
 | 📱 **Media Session** | Portada y metadatos en la pantalla de bloqueo del móvil |
 | 🧹 **Mantenimiento** | CLI `api/maintenance.php`: auditoría/limpieza de portadas, retro-relleno por itemId y deduplicación del historial |
@@ -56,12 +56,12 @@
 ### Metodo 1: Descarga desde Releases (wget + unzip) ⭐ Recomendado
 
 1. Copia la URL del ZIP de la última release desde [Releases](https://github.com/pepebarrascout/radio-en-linea-web/releases)
-2. En tu servidor (o por SSH en cPanel), dentro de la carpeta pública destino (p. ej. `public_html/qc/`):
+2. En tu servidor (o por SSH en cPanel), dentro de la carpeta pública. **En producción la web vive en la RAÍZ de `public_html/`** — si la instalas en una subcarpeta, ajusta las rutas de todos los pasos:
 
    ```bash
-   cd ~/public_html/qc
-   wget https://github.com/pepebarrascout/radio-en-linea-web/releases/download/v0.1.4/radio-en-linea-web-v0.1.4.zip
-   unzip radio-en-linea-web-v0.1.4.zip && rm radio-en-linea-web-v0.1.4.zip
+   cd ~/public_html
+   wget https://github.com/pepebarrascout/radio-en-linea-web/releases/download/v0.1.6/radio-en-linea-web-v0.1.6.zip
+   unzip radio-en-linea-web-v0.1.6.zip && rm radio-en-linea-web-v0.1.6.zip
    ```
 
 3. Crea la configuración privada (Pasos 1 y 2 de [Configuración](#️-configuracion))
@@ -69,14 +69,16 @@
 5. (Opcional) Claves VAPID para los avisos push (Paso 6)
 6. Abre tu web y pulsa play 🎶
 
-> El ZIP trae ya la estructura completa (incluidas las carpetas `api/data/` y `api/covers/` con su `.htaccess` de protección). Los archivos de datos se crean solos la primera vez que se usa la web.
+> El ZIP trae ya la estructura completa (incluidas las carpetas `api/data/` y `api/covers/` con su `.htaccess` de protección). Los archivos de datos se crean solos la primera vez que se usa la web — y si tu hosting no deja a PHP crear archivos, se crean a mano en 1 minuto (ver [Archivos de datos y permisos](#-archivos-de-datos-y-permisos-importante)).
 
 ### Metodo 2: Clonar el repositorio
 
 ```bash
 cd ~/public_html
-git clone https://github.com/pepebarrascout/radio-en-linea-web.git qc
+git clone https://github.com/pepebarrascout/radio-en-linea-web.git .
 ```
+
+> Si `public_html` no está vacío, clona en una subcarpeta (`git clone ... qc`), mueve el contenido a la raíz… o usa el ZIP del Método 1, que es lo más simple.
 
 Después, los mismos pasos 3-5 del Método 1.
 
@@ -89,7 +91,7 @@ Después, los mismos pasos 3-5 del Método 1.
 El dominio de tu servidor (endpoint NowPlaying del plugin RadioOnline) **nunca va escrito en el código**: el navegador consulta los proxys del propio hosting (`api/nowplaying.php` y `api/artwork.php`) y solo el PHP del servidor conoce la URL real.
 
 ```bash
-cd ~/public_html/qc/api
+cd ~/public_html/api
 cp config.example.php config.php
 nano config.php   # pega tu URL en QCR_NOWPLAYING_URL_VALUE
 ```
@@ -103,7 +105,7 @@ nano config.php   # pega tu URL en QCR_NOWPLAYING_URL_VALUE
 Los votos se consumen desde Jellyfin **una vez a la semana** con un token secreto que **nunca va hardcodeado en el código**:
 
 ```bash
-cd ~/public_html/qc/api
+cd ~/public_html/api
 cp config.example.php config.php   # si ya lo creaste en el Paso 1, solo añade el token
 # Genera un token aleatorio y edítalo:
 php -r "echo bin2hex(random_bytes(24)) . PHP_EOL;"
@@ -111,7 +113,7 @@ nano config.php   # pega el token en QCR_VOTES_TOKEN_VALUE
 ```
 
 - La URL que configura el plugin de Jellyfin es:
-  `https://tu-dominio.com/qc/api/votes.php?token=TU_TOKEN`
+  `https://tu-dominio.com/api/votes.php?token=TU_TOKEN`
 - Para mirar los votos **sin consumirlos**: añade `&ver=1`
 - Alternativa sin `config.php`: define la variable de entorno `QCR_VOTES_TOKEN`
 
@@ -120,7 +122,7 @@ nano config.php   # pega el token en QCR_VOTES_TOKEN_VALUE
 En cPanel → **Cron Jobs** (o crontab):
 
 ```
-* * * * * php /home/USUARIO/public_html/qc/api/cron-update.php >/dev/null 2>&1
+* * * * * php /home/USUARIO/public_html/api/cron-update.php >/dev/null 2>&1
 ```
 
 Consulta el historial de Jellyfin cada minuto, registra las canciones nuevas y baja sus portadas. Es idempotente: puede ejecutarse las veces que haga falta sin duplicados.
@@ -158,15 +160,75 @@ Notificación «En 10 minutos empieza…» con Web Push estándar (VAPID + cifra
 php api/push-trigger.php --generate-keys
 
 # 2) Añade UNA línea más al cron (cada minuto):
-#    * * * * * php /home/USUARIO/public_html/qc/api/push-trigger.php >/dev/null 2>&1
+#    * * * * * php /home/USUARIO/public_html/api/push-trigger.php >/dev/null 2>&1
+
+# 3) Verifica que todo quedó vivo:
+php api/push-trigger.php --verbose
 ```
 
 - La fuente de datos es `programacion.json`: si editas la parrilla, los avisos la siguen; zona horaria America/Guatemala
-- Anti-spam por diseño: el oyente se suscribe VOLUNTARIAMENTE desde el panel de Programación (botón «🔔 Activar avisos»), elige **todos los programas** o **solo tarde y noche (≥14:00)**, hay máximo 1 aviso por programa y día, nunca avisos atrasados, no se apilan (mismo tag), el aviso se silencia si el oyente ya está escuchando y la baja es en 1 toque (botón en la web o «Silenciar avisos» dentro de la propia notificación)
+- Anti-spam por diseño: el oyente se suscribe VOLUNTARIAMENTE desde el panel de Programación (botón «🔔 Activar avisos»), hay máximo 1 aviso por programa y día, nunca avisos atrasados, no se apilan (mismo tag), el aviso se silencia si el oyente ya está escuchando y la baja es en 1 toque (botón en la web o «Silenciar avisos» dentro de la propia notificación)
+- **El oyente elige su franja** (v0.1.6): **Todos los programas** · **Solo mañana** (06:00 a 14:00) · **Solo tarde** (14:00 a 21:00) · **Todo el día** (06:00 a 21:00). La franja se evalúa sobre la hora de INICIO del programa. Las suscripciones hechas con v0.1.4/v0.1.5 («tarde y noche») siguen funcionando: se interpretan como «solo tarde»
 - Al tocar la notificación se abre la web/PWA y arranca la radio (si el navegador bloquea el autoplay, queda lista con el botón de play)
-- Pruebas: `php api/push-trigger.php --test-send` (a todos) y `--anuncio="Texto libre"` (aviso importante manual, también a todos); `--dry-run` muestra qué enviaría sin enviar
 - Las suscripciones muertas (404/410) se limpian solas; almacenadas en `api/data/subscribers.json` (carpeta protegida, sin acceso web)
 - iOS: los avisos requieren la PWA instalada en pantalla de inicio (iOS ≥ 16.4); en Android funcionan en el navegador y en la PWA
+
+#### Enviar avisos push manualmente
+
+Todos los comandos se ejecutan desde la raíz de la web (`~/public_html`). Los avisos manuales llegan a **TODOS** los suscriptores, sin importar su franja (la franja solo filtra los recordatorios automáticos de programas):
+
+| Comando | Qué hace |
+|---|---|
+| `php api/push-trigger.php --anuncio="Hoy a las 20:00, programa especial"` | Envía TU texto como aviso a todos los suscriptores |
+| `php api/push-trigger.php --test-send` | Notificación de prueba a todos («si lees esto, todo funciona») |
+| `php api/push-trigger.php --verbose` | Ciclo normal con detalle: **Suscriptores: N**, programas por avisar ahora y resultado de cada envío |
+| `php api/push-trigger.php --dry-run --verbose` | Muestra qué aviso enviaría AHORA mismo, sin enviar nada ni marcar estado |
+
+Consejos rápidos:
+
+- Antes de un evento: `--test-send` para confirmar que llega, y luego `--anuncio="..."` con tu mensaje real
+- Si `--verbose` dice `Suscriptores: 0` pese a que ya hay gente activada, casi siempre es el archivo `subscribers.json` que falta o no es escribible (ver la sección siguiente)
+- Cada envío deja rastro en `api/data/push-trigger.log`
+
+---
+
+## 📦 Archivos de datos y permisos (importante)
+
+Todo el estado vive en archivos JSON (sin base de datos). Normalmente **PHP los crea solo** la primera vez que se usan; pero en algunos hostings el usuario con el que corre la web (p. ej. `php-web`) NO puede crear archivos dentro de carpetas que subiste tú por FTP/ZIP (dueño distinto). Si al activar los avisos, votar o usar la web todo «funciona pero no guarda nada», crealos tú a mano:
+
+```bash
+cd ~/public_html
+
+# Historial de canciones (vive en la raíz de api/):
+echo '[]' > api/history.json
+
+# Carpeta protegida api/data/ — votos, avisos push y caché:
+echo '[]' > api/data/votes.json
+echo '{}' > api/data/voters.json
+echo '[]' > api/data/subscribers.json
+echo '{}' > api/data/np-cache.json
+
+# Permisos de escritura para el usuario de PHP:
+chmod 666 api/history.json api/data/*.json
+chmod 777 api/covers   # portadas que descarga el cron
+```
+
+| Archivo | Qué guarda | Contenido inicial |
+|---|---|---|
+| `api/history.json` | Historial de canciones | `[]` |
+| `api/data/votes.json` | Conteos de votos por canción | `[]` o `{}` |
+| `api/data/voters.json` | Voto anónimo por visitante (cookie) | `{}` |
+| `api/data/subscribers.json` | Suscriptores de los avisos push (endpoint, claves y franja) | `[]` |
+| `api/data/np-cache.json` | Caché de 5 s de «Ahora suena» | `{}` |
+| `api/data/push-state.json` | Avisos ya enviados hoy (idempotencia) | se crea solo al primer aviso |
+| `api/data/push-trigger.log` / `api/cron-update.log` | Logs acumulativos (opcionales) | se crean solos |
+
+Notas:
+
+- Si tienes dudas, `[]` también funciona como contenido inicial de todos (las APIs lo reinterpretan); lo importante es que el archivo EXISTA y PHP pueda escribirlo
+- Si el archivo ya existe pero PHP no puede ESCRIBIRLO, los votos/avisos fallan en silencio: `chmod 666` lo resuelve
+- Comprueba el dueño con `ls -l api/data/`: si tu usuario de FTP creó la carpeta, PHP (otro usuario) necesita permiso de escritura para el grupo u «otros» en la carpeta y 666 en los archivos
+- Tras crear `subscribers.json`, el oyente debe volver a pulsar «🔔 Activar avisos» en la web (desactivar y activar si ya estaba activado)
 
 ---
 
@@ -222,15 +284,19 @@ php api/push-trigger.php --generate-keys
 | `api/votes.php?token=...` | GET | ⚠️ Privado: **consume** los votos (lista ordenada + respaldo + reset del ciclo) |
 | `api/votes.php?token=...&ver=1` | GET | Privado: solo lectura (no toca nada) |
 | `api/cron-update.php` | CLI | Actualizador 24/7 del historial (`--verbose` para detalle) |
+| `api/push-config.php` | GET | Clave pública VAPID para el navegador (503 si no está configurada) |
+| `api/push-subscribe.php` | POST/DELETE | Alta, cambio de franja y baja de suscriptores push |
+| `api/push-trigger.php` | CLI / HTTP | Cron de avisos + manuales (`--anuncio`, `--test-send`, `--dry-run`) |
+| `api/maintenance.php` | CLI | Auditoría/limpieza de portadas y deduplicación del historial |
 
-Carpetas protegidas con `.htaccess` (Apache 2.2/2.4): `api/data/` (votos, votantes y respaldos) y `api/covers/`.
+Carpetas protegidas con `.htaccess` (Apache 2.2/2.4): `api/data/` (votos, votantes, suscriptores push y respaldos) y `api/covers/`.
 
 ---
 
 ## 🔧 Solucion de Problemas
 
 ### Falta el CSS o algún asset (404)
-- El ZIP debe extraerse **dentro** de la carpeta destino (`public_html/qc/`): comprueba que exista `assets/css/app.css`
+- El ZIP debe extraerse **dentro** de la carpeta destino (`~/public_html/` en producción): comprueba que exista `assets/css/app.css`
 - Tras actualizar archivos, haz **Ctrl+F5** (el service worker renueva la caché con el nuevo `CACHE_NAME`)
 
 ### El historial no se actualiza
@@ -240,7 +306,7 @@ Carpetas protegidas con `.htaccess` (Apache 2.2/2.4): `api/data/` (votos, votant
 
 ### La web queda en "Esperando transmisión…"
 - Falta `api/config.php` con la URL del servidor de la radio (Paso 1 de Configuración)
-- Comprueba el proxy: `curl https://tu-dominio.com/qc/api/nowplaying.php` → debe devolver el JSON con la canción en emisión
+- Comprueba el proxy: `curl https://tu-dominio.com/api/nowplaying.php` → debe devolver el JSON con la canción en emisión
 
 ### El consumo de votos responde 503 `token_no_configurado`
 - Falta definir `QCR_VOTES_TOKEN_VALUE` en `api/config.php` (Paso 2 de Configuración)
@@ -248,6 +314,16 @@ Carpetas protegidas con `.htaccess` (Apache 2.2/2.4): `api/data/` (votos, votant
 ### La programación no se ve
 - `programacion.json` debe ser JSON válido; usa `programacion.json.example` como plantilla
 - Los cambios manuales se reflejan solos (la web la reconsulta cada 5 minutos y al recargar)
+
+### Los avisos push dicen «Suscriptores: 0» o no se activan
+- Casi siempre es el archivo `subscribers.json` que falta o que PHP no puede escribir: créalo a mano y dale permisos (ver [Archivos de datos y permisos](#-archivos-de-datos-y-permisos-importante))
+- Tras crearlo, el oyente debe pulsar de nuevo «🔔 Activar avisos» (desactivar y activar si ya estaba)
+- Comprueba las claves VAPID: `php api/push-trigger.php --verbose` NO debe decir «faltan las claves»
+- Detalle de cada envío: `php api/push-trigger.php --verbose` y el log `api/data/push-trigger.log`
+
+### Los votos o el historial no se guardan
+- Suele ser permisos: PHP no puede crear/escribir los JSON de datos (ver [Archivos de datos y permisos](#-archivos-de-datos-y-permisos-importante))
+- Diagnóstico rápido: `ls -l api/ api/data/` — los archivos deben ser escribibles por el usuario de PHP
 
 ---
 
@@ -267,12 +343,16 @@ Carpetas protegidas con `.htaccess` (Apache 2.2/2.4): `api/data/` (votos, votant
 | `api/artwork.php` | Proxy de portadas del reproductor (validación de imagen real) |
 | `api/np-lib.php` | Resolución de la URL del servidor de la radio (env/config) y descarga HTTP compartida |
 | `api/cron-update.php` | Actualizador automático 24/7 (cron) |
+| `api/push-lib.php` | Motor Web Push: VAPID ES256 (RFC 8292), cifrado aes128gcm (RFC 8291), franjas horarias y almacén de suscriptores |
+| `api/push-config.php` | Entrega la clave pública VAPID al navegador |
+| `api/push-subscribe.php` | Alta / cambio de franja / baja de suscriptores (JSON puro) |
+| `api/push-trigger.php` | Cron de avisos cada minuto + avisos manuales y pruebas (CLI/HTTP) |
 | `api/covers-lib.php` | Caché de portadas (descarga, validación y recolector de basura) |
 | `api/vote.php` | Votos individuales anónimos (cookie `qc_vid`) |
 | `api/vote-lib.php` | Lógica de votos, ciclo de consumo atómico con `flock` |
 | `api/votes.php` | Export/consumo privado para Jellyfin (token) |
 | `api/config.example.php` | Plantilla de configuración privada (copiar a `config.php`) |
-| `api/data/` | `votes.json`, `voters.json`, respaldos semanales (protegido) |
+| `api/data/` | `votes.json`, `voters.json`, `subscribers.json`, `push-state.json`, `np-cache.json` y respaldos semanales (protegido) |
 | `programacion.json.example` | Plantilla de la programación semanal |
 
 ---

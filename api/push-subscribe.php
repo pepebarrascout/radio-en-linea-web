@@ -3,7 +3,7 @@
  * ============================================================
  *  Que Chilero Radio — Alta y baja de suscripciones push
  * ============================================================
- *  v0.1.4 — Almacén JSON puro (sin base de datos), igual que los
+ *  v0.1.6 — Almacén JSON puro (sin base de datos), igual que los
  *  votos: api/data/subscribers.json (carpeta protegida por
  *  .htaccess; los navegadores NUNCA acceden a este archivo).
  *
@@ -11,8 +11,12 @@
  *
  *  POST (suscribir / cambiar preferencias)
  *    body: { endpoint, keys:{p256dh, auth}, prefs:{mode} }
- *      mode: "all"     → todos los programas
- *            "evening" → solo tarde y noche (inicio ≥ 14:00)
+ *      mode: "all"       → todos los programas
+ *            "morning"   → solo mañana  (inicio 06:00–14:00)
+ *            "afternoon" → solo tarde   (inicio 14:00–21:00)
+ *            "day"       → todo el día  (inicio 06:00–21:00)
+ *            "evening"   → alias legado (v0.1.4/v0.1.5) que se
+ *                          guarda normalizado como "afternoon"
  *    resp: { ok:true, mode, total }
  *
  *  DELETE (baja — también la usa el botón «Silenciar avisos»
@@ -29,8 +33,8 @@ require_once __DIR__ . '/push-lib.php';
 
 // ── Configuración ────────────────────────────────────────────
 
-// Modos de preferencia válidos (v0.1.4: el oyente elige)
-const PUSH_MODES = ['all', 'evening'];
+// Modos válidos (PUSH_MODES) y ventanas horarias viven en
+// push-lib.php (las comparte con push-trigger.php).
 
 // Límite anti-abuso
 const MAX_SUBSCRIBERS = 2000;
@@ -72,15 +76,15 @@ function validateSubscriptionPayload(string $raw): array
     }
 
     $prefs = $data['prefs'] ?? [];
-    $mode  = is_array($prefs) ? (string)($prefs['mode'] ?? 'all') : 'all';
+    $mode  = pushNormalizeMode(is_array($prefs) ? (string)($prefs['mode'] ?? 'all') : 'all');
     if (!in_array($mode, PUSH_MODES, true)) {
-        return [null, 'prefs.mode inválido (use all o evening)'];
+        return [null, 'prefs.mode inválido (use all, morning, afternoon o day)'];
     }
 
     $record = [
         'endpoint' => $endpoint,
         'keys'     => ['p256dh' => $p256dh, 'auth' => $auth],
-        'mode'     => $mode,
+        'mode'     => $mode,   // ya normalizado (evening → afternoon)
     ];
 
     return [$record, null];

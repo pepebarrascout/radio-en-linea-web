@@ -32,7 +32,7 @@
  *
  *  O por HTTP (útil para health-checks externos):
  *
- *      https://tu-dominio.com/qc/api/cron-update.php?key=TU_CLAVE
+ *      https://tu-dominio.com/api/cron-update.php?key=TU_CLAVE
  *
  *  ⚠️  Si lo llamas por HTTP, define CRON_SECRET_KEY abajo con
  *      una clave aleatoria y pásala como ?key=... (si la clave

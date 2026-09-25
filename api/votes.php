@@ -10,11 +10,11 @@
  *
  *  A) VER sin consumir — para comprobar a mano, NO toca nada:
  *
- *      GET https://quechilero.com/qc/api/votes.php?token=TU_TOKEN&ver=1
+ *      GET https://quechilero.com/api/votes.php?token=TU_TOKEN&ver=1
  *
  *  B) CONSUMO SEMANAL (el que debe llamar Jellyfin 1 vez/semana):
  *
- *      GET https://quechilero.com/qc/api/votes.php?token=TU_TOKEN
+ *      GET https://quechilero.com/api/votes.php?token=TU_TOKEN
  *
  *      → En UNA SOLA operación atómica:
  *          1. Devuelve TODO lo acumulado ordenado por popularidad
