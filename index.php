@@ -186,14 +186,6 @@
 
           <div id="day-tabs" class="flex overflow-x-auto gap-1 mb-4 pb-2 scrollbar-hide"></div>
 
-          <div class="list-card rounded-2xl overflow-hidden border theme-transition">
-            <div id="schedule-empty" class="hidden p-8 text-center text-faint">
-              <i class="fas fa-calendar-times text-3xl mb-2"></i>
-              <p id="schedule-empty-text">Cargando programación...</p>
-            </div>
-            <div id="schedule-rows" class="divide-y divide-gray-200/30 hidden"></div>
-          </div>
-
           <!-- ═══════════ Avisos de programas (push, opt-in voluntario) ═══════════ -->
           <div id="push-block" class="push-block theme-transition">
             <button id="push-toggle" class="push-btn" type="button" aria-pressed="false">
@@ -219,6 +211,14 @@
               </div>
             </div>
             <p id="push-hint" class="hidden text-xs text-faint mt-2"></p>
+          </div>
+
+          <div class="list-card rounded-2xl overflow-hidden border theme-transition">
+            <div id="schedule-empty" class="hidden p-8 text-center text-faint">
+              <i class="fas fa-calendar-times text-3xl mb-2"></i>
+              <p id="schedule-empty-text">Cargando programación...</p>
+            </div>
+            <div id="schedule-rows" class="divide-y divide-gray-200/30 hidden"></div>
           </div>
         </section>
 

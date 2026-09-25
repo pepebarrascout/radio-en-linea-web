@@ -897,7 +897,19 @@
     if (!('serviceWorker' in navigator)) return;
     if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js').catch(function (err) {
+      // updateViaCache:'none' → la comprobación de sw.js NUNCA pasa por la
+      // caché HTTP: una versión nueva del SW se detecta al instante en el
+      // siguiente abrir de la web (evita CSS/JS viejos tras un despliegue)
+      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(function (reg) {
+        // Acelera la adopción de versiones nuevas: al volver a la web
+        // (pestaña re-enfocada o app re-abierta) se re-chequea el SW
+        var check = function () {
+          if (document.visibilityState !== 'visible') return;
+          try { reg.update(); } catch (e) { /* el navegador lo re-chequea solo */ }
+        };
+        document.addEventListener('visibilitychange', check);
+        window.addEventListener('pageshow', check);
+      }).catch(function (err) {
         console.error('Error registrando el service worker:', err);
       });
     });

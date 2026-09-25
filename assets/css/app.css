@@ -53,12 +53,13 @@
 .tab-btn.tab-selected:hover,
 .dark .tab-btn.tab-selected:hover{background-color:#000080;color:#ffffff}
 
-/* ── Avisos de programas — bloque push opt-in (v0.1.4) ──────────
+/* ── Avisos de programas — bloque push opt-in (v0.1.5) ──────────
    Discreto a propósito: vive dentro del panel de Programación,
-   con borde punteado suave (no un banner agresivo). El oyente
-   activa, elige el alcance (todos / tarde-noche) o apaga con un
-   toque. Mismo lenguaje visual que el banner de instalación. */
-.push-block{margin-top:1rem;padding:.875rem 1rem;border-radius:1rem;border:1px dashed oklch(92.8% .006 264.531);background-color:rgba(0,0,128,.03)}
+   entre los días de la semana y la lista de programas, con borde
+   punteado suave (no un banner agresivo). El oyente activa, elige
+   el alcance (todos / tarde-noche) o apaga con un toque. Mismo
+   lenguaje visual que el banner de instalación. */
+.push-block{margin:0 0 1rem;padding:.875rem 1rem;border-radius:1rem;border:1px dashed oklch(92.8% .006 264.531);background-color:rgba(0,0,128,.03)}
 .dark .push-block{border-color:rgba(255,255,255,.12);background-color:rgba(59,91,219,.08)}
 .push-btn{cursor:pointer;border:0;border-radius:9999px;padding:.5rem 1rem;font-size:.8125rem;font-weight:600;font-family:inherit;color:#fff;background-color:#000080;transition:all .2s;display:inline-flex;align-items:center;gap:.35rem}
 .push-btn:hover{background-color:#0000b3;transform:translateY(-1px)}

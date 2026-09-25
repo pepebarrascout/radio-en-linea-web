@@ -395,3 +395,22 @@ Fecha: 2026-09-15
 - Nueva suite `scripts/test-fase9.sh`: **27 grupos** (lint, estructura SW/HTML/JS/CSS/PHP, ambas suites y escaneo anti-secretos).
 - Regresión completa: historial **16/16**, votos/portadas **29/29**, consumo **26/26**, HTTP consumo **23/23**, smoke fase 5 **5/5**, fase 6 **20/20**, fase 7 **37/37**, fase 8 **28/28** (SW v8+), integración v1 **17/17**, integración v2 **50/50**. Total **~325 aserciones** verdes. `php -l` y `node --check` limpios.
 - Escaneo: cero tokens de GitHub, cero dominios reales del servidor de la radio, cero claves privadas en el repositorio.
+
+---
+
+# v0.1.5 — El bloque de avisos se reubica y las versiones llegan al instante
+
+## 🎯 Qué se corrige (feedback tras desplegar v0.1.4 en producción)
+
+| Cambio | Detalle |
+|---|---|
+| **El bloque «🔔 Activar avisos» cambia de sitio** | Estaba DEBAJO de la lista de programas y se leía como un pie suelto. Ahora vive **debajo de los días de la semana y ANTES de la lista de programas**, integrado en el flujo natural del panel (días → avisos → parrilla). Su margen pasa de arriba a abajo para respetar el espaciado del panel |
+| **Por qué se veía como «texto plano sin función» en algunos dispositivos** | No era el código: era la CACHÉ. El navegador de cada visitante seguía sirviendo `app.css`/`app.js` viejos (sin los estilos ni el binding del botón) desde el service worker anterior, mientras `index.php` (nunca cacheado) ya era el nuevo. Con un navegador limpio, producción servía el botón correcto y funcional (verificado en vivo). El fix de fondo: ver la fila siguiente |
+| **Actualización del service worker acelerada** | `register('./sw.js', { updateViaCache: 'none' })`: la comprobación de `sw.js` ya NUNCA pasa por la caché HTTP, y al re-enfocar la pestaña o re-abrir la app se fuerza `reg.update()`. Resultado: tras cualquier despliegue, los visitantes reciben CSS/JS nuevos en su siguiente visita (antes podían necesitar dos recargas) |
+| **Caché del SW** | `qcr-static-v8` → `qcr-static-v9` para forzar el re-descargo de los estáticos con esta versión |
+
+## 🧪 Verificación (v0.1.5)
+
+- `php -l` limpio en los PHP tocados y `node --check` en `app.js`/`sw.js`.
+- Suite fase 9 (27 grupos) actualizada a `qcr-static-v9` y en verde.
+- Verificación EN VIVO contra producción (navegador limpio): el botón se muestra con su estilo (fondo navy, píldora, fuente Inter) y al pulsarlo se despliega el selector «todos / tarde y noche».
