@@ -434,3 +434,22 @@ Fecha: 2026-09-15
 - Suite push end-to-end ampliada a **47 aserciones** (franjas: límites 06:00/14:00/21:00, alias `evening`→`afternoon`, modo inválido → 400, modo guardado normalizado, onda determinista a cualquier hora).
 - Fase 9: **29/29 grupos** (2 checks nuevos de franjas); fase 7 y 8 actualizadas al patrón de caché v10+.
 - Regresión completa en verde: historial 16+39, votos/portadas 29, consumo 26+23, smoke 5, fase 6 20, fase 7 37, fase 8 28, integración v1 17 y v2 50 (~330 aserciones). `php -l` y `node --check` limpios.
+
+# v0.1.7 — Franjas multi-selección y radio que no se rinde
+
+## 🎯 Qué se agrega/corrige
+
+| Cambio | Detalle |
+|---|---|
+| **Multi-selección de franjas de avisos** | El selector «🔔 Activar avisos» pasa de 4 radios a 5 casillas: **Noche** (inicio 22:00 a 05:00, cruza la medianoche), **Mañana** (05:00 a 14:00), **Tarde** (14:00 a 21:00) — combinables entre sí — más los excluyentes **Todos los programas** y **Ninguno** (solo anuncios manuales de la radio). Marcar «Todos» o «Ninguno» desmarca las otras casillas; marcar una franja desmarca a los excluyentes. Nota: entre 21:00 y 21:59 no hay franja (solo reciben esos avisos los de «Todos») |
+| **«Cambiar franjas» sin darse de baja** | Botón nuevo junto al toggle: abre el selector prellenado con las franjas guardadas en el servidor (nuevo `GET api/push-subscribe.php?endpoint=…`) y las actualiza con el mismo POST de alta — sin romper la suscripción push |
+| **Compatibilidad de suscriptores antiguos** | Los modos legados se interpretan al leer cada registro, sin reescribir `subscribers.json`: `morning`→`manana`, `afternoon`/`evening`→`tarde`, `day`→`manana,tarde`; vacío/desconocido→`all`. El campo `mode` ahora guarda CSV canónico (`noche,tarde`) |
+| **Reanudación automática del audio** | Chrome (Android) pausa la pestaña cuando otra toma el foco de audio; también hay interrupciones del sistema y cortes de red. Ahora la web distingue la pausa pedida por el oyente (botón/pantalla de bloqueo) de la pausa EXTERNA: la externa reconecta sola al borde del vivo con reintentos y backoff 1→2→4→8→16→30 s (6 intentos ≈ 61 s de cortesía, para no pelear el foco con lo que el oyente esté viendo); después, basta volver a la pestaña, reabrir la PWA o tocar la pantalla para reanudar al instante. La pausa del botón y de la pantalla de bloqueo (`stopByUser`) JAMÁS dispara reintentos |
+| **Vigilante de stream congelado** | Cuando la red se corta (WiFi↔datos, ahorro de energía) el `<audio>` puede quedarse «sonando» sin llegar datos, sin evento fiable. Un vigilante cada 3 s detecta `currentTime` congelado ~6 s y recarga el vivo |
+| **Detalles** | El `load()` interno de una reconexión ya no se confunde con pausa externa (bandera `reconnecting`); el aviso de confirmación lista las franjas elegidas («noche y tarde»); CSS de casillas con `accent-color` del tema |
+| **Caché del SW** | `qcr-static-v10` → `qcr-static-v11` |
+
+## 🧪 Verificación (v0.1.7)
+
+- Suite push ampliada a **69 aserciones**: ventanas nuevas (noche cruza medianoche; hueco 21:00–21:59 solo con «Todos»), normalización CSV/acentos/duplicados, exclusividad `all`/`none` (tolerante y estricta), legados morning/afternoon/day/evening, `none` jamás recibe recordatorios, POST multi-franja y `GET ?endpoint=` (200 y 404).
+- Regresión completa en verde (~350 aserciones): fase 6 20/20, fase 7 37, fase 8 28/28, fase 9 29/29 grupos (incluye test-pkg-historial 39 y test-push 69), smoke 5, historial-lib 16, votos/portadas 29, consumo, integración v1 17 y v2 50/50. `php -l` y `node --check` limpios.

@@ -33,7 +33,8 @@
 | 🛡️ **Sin dominios expuestos** | El navegador solo habla con tu hosting (proxys de NowPlaying y portadas); el dominio del servidor de la radio nunca aparece en el código ni en la red del cliente |
 | 🔒 **Privacidad** | Los conteos nunca son públicos; los votantes nunca se exponen |
 | 📲 **PWA instalable** | Manifest + service worker + banner de instalación con detección Android/iOS |
-| 🔔 **Avisos de programas** | Notificación push 10 minutos antes de cada programa (Web Push + VAPID, sin Firebase). El oyente elige su franja: **todos los programas**, **solo mañana** (06:00–14:00), **solo tarde** (14:00–21:00) o **todo el día** (06:00–21:00); silencio automático si ya está escuchando y baja en 1 toque |
+| 🔔 **Avisos de programas** | Notificación push 10 minutos antes de cada programa (Web Push + VAPID, sin Firebase). El oyente elige UNA o VARIAS franjas: **noche** (22:00–05:00), **mañana** (05:00–14:00) y/o **tarde** (14:00–21:00), o los excluyentes **todos** / **ninguno** (v0.1.7); se pueden cambiar sin darse de baja («Cambiar franjas»); silencio automático si ya está escuchando y baja en 1 toque |
+| 📻 **Reproducción resiliente** (v0.1.7) | Si otra pestaña/app «roba» el foco de audio o la red congela el stream, la radio se reconecta sola al borde del vivo (reintentos con backoff 1→30 s + vigilante de stream congelado); tras pausas largas basta volver a la pestaña o tocar la pantalla |
 | 🌗 **Tema claro/oscuro** | Persistente, aplicado antes de pintar (sin destellos) |
 | 📱 **Media Session** | Portada y metadatos en la pantalla de bloqueo del móvil |
 | 🧹 **Mantenimiento** | CLI `api/maintenance.php`: auditoría/limpieza de portadas, retro-relleno por itemId y deduplicación del historial |
@@ -60,8 +61,8 @@
 
    ```bash
    cd ~/public_html
-   wget https://github.com/pepebarrascout/radio-en-linea-web/releases/download/v0.1.6/radio-en-linea-web-v0.1.6.zip
-   unzip radio-en-linea-web-v0.1.6.zip && rm radio-en-linea-web-v0.1.6.zip
+   wget https://github.com/pepebarrascout/radio-en-linea-web/releases/download/v0.1.7/radio-en-linea-web-v0.1.7.zip
+   unzip radio-en-linea-web-v0.1.7.zip && rm radio-en-linea-web-v0.1.7.zip
    ```
 
 3. Crea la configuración privada (Pasos 1 y 2 de [Configuración](#️-configuracion))
@@ -168,7 +169,7 @@ php api/push-trigger.php --verbose
 
 - La fuente de datos es `programacion.json`: si editas la parrilla, los avisos la siguen; zona horaria America/Guatemala
 - Anti-spam por diseño: el oyente se suscribe VOLUNTARIAMENTE desde el panel de Programación (botón «🔔 Activar avisos»), hay máximo 1 aviso por programa y día, nunca avisos atrasados, no se apilan (mismo tag), el aviso se silencia si el oyente ya está escuchando y la baja es en 1 toque (botón en la web o «Silenciar avisos» dentro de la propia notificación)
-- **El oyente elige su franja** (v0.1.6): **Todos los programas** · **Solo mañana** (06:00 a 14:00) · **Solo tarde** (14:00 a 21:00) · **Todo el día** (06:00 a 21:00). La franja se evalúa sobre la hora de INICIO del programa. Las suscripciones hechas con v0.1.4/v0.1.5 («tarde y noche») siguen funcionando: se interpretan como «solo tarde»
+- **El oyente elige sus franjas** (v0.1.7, multi-selección): puede marcar **Noche** (inicio 22:00 a 05:00), **Mañana** (05:00 a 14:00) y/o **Tarde** (14:00 a 21:00) a la vez, o los excluyentes **Todos los programas** y **Ninguno** (solo anuncios manuales). La franja se evalúa sobre la hora de INICIO del programa (nota: entre 21:00 y 21:59 solo reciben avisos los de «Todos»). Con «Cambiar franjas» las modifica sin darse de baja. Suscripciones anteriores siguen funcionando: `morning`→mañana, `afternoon`/`evening`→tarde, `day`→mañana+tarde
 - Al tocar la notificación se abre la web/PWA y arranca la radio (si el navegador bloquea el autoplay, queda lista con el botón de play)
 - Las suscripciones muertas (404/410) se limpian solas; almacenadas en `api/data/subscribers.json` (carpeta protegida, sin acceso web)
 - iOS: los avisos requieren la PWA instalada en pantalla de inicio (iOS ≥ 16.4); en Android funcionan en el navegador y en la PWA
@@ -218,7 +219,7 @@ chmod 777 api/covers   # portadas que descarga el cron
 | `api/history.json` | Historial de canciones | `[]` |
 | `api/data/votes.json` | Conteos de votos por canción | `[]` o `{}` |
 | `api/data/voters.json` | Voto anónimo por visitante (cookie) | `{}` |
-| `api/data/subscribers.json` | Suscriptores de los avisos push (endpoint, claves y franja) | `[]` |
+| `api/data/subscribers.json` | Suscriptores de los avisos push (endpoint, claves y franjas en CSV) | `[]` |
 | `api/data/np-cache.json` | Caché de 5 s de «Ahora suena» | `{}` |
 | `api/data/push-state.json` | Avisos ya enviados hoy (idempotencia) | se crea solo al primer aviso |
 | `api/data/push-trigger.log` / `api/cron-update.log` | Logs acumulativos (opcionales) | se crean solos |
@@ -285,7 +286,7 @@ Notas:
 | `api/votes.php?token=...&ver=1` | GET | Privado: solo lectura (no toca nada) |
 | `api/cron-update.php` | CLI | Actualizador 24/7 del historial (`--verbose` para detalle) |
 | `api/push-config.php` | GET | Clave pública VAPID para el navegador (503 si no está configurada) |
-| `api/push-subscribe.php` | POST/DELETE | Alta, cambio de franja y baja de suscriptores push |
+| `api/push-subscribe.php` | GET/POST/DELETE | Alta, cambio de franjas y baja de suscriptores push (`GET ?endpoint=` lee las franjas guardadas) |
 | `api/push-trigger.php` | CLI / HTTP | Cron de avisos + manuales (`--anuncio`, `--test-send`, `--dry-run`) |
 | `api/maintenance.php` | CLI | Auditoría/limpieza de portadas y deduplicación del historial |
 
@@ -343,9 +344,9 @@ Carpetas protegidas con `.htaccess` (Apache 2.2/2.4): `api/data/` (votos, votant
 | `api/artwork.php` | Proxy de portadas del reproductor (validación de imagen real) |
 | `api/np-lib.php` | Resolución de la URL del servidor de la radio (env/config) y descarga HTTP compartida |
 | `api/cron-update.php` | Actualizador automático 24/7 (cron) |
-| `api/push-lib.php` | Motor Web Push: VAPID ES256 (RFC 8292), cifrado aes128gcm (RFC 8291), franjas horarias y almacén de suscriptores |
+| `api/push-lib.php` | Motor Web Push: VAPID ES256 (RFC 8292), cifrado aes128gcm (RFC 8291), franjas horarias multi-selección y almacén de suscriptores |
 | `api/push-config.php` | Entrega la clave pública VAPID al navegador |
-| `api/push-subscribe.php` | Alta / cambio de franja / baja de suscriptores (JSON puro) |
+| `api/push-subscribe.php` | Alta / cambio de franjas / lectura / baja de suscriptores (JSON puro) |
 | `api/push-trigger.php` | Cron de avisos cada minuto + avisos manuales y pruebas (CLI/HTTP) |
 | `api/covers-lib.php` | Caché de portadas (descarga, validación y recolector de basura) |
 | `api/vote.php` | Votos individuales anónimos (cookie `qc_vid`) |

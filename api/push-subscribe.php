@@ -3,7 +3,7 @@
  * ============================================================
  *  Que Chilero Radio — Alta y baja de suscripciones push
  * ============================================================
- *  v0.1.6 — Almacén JSON puro (sin base de datos), igual que los
+ *  v0.1.7 — Almacén JSON puro (sin base de datos), igual que los
  *  votos: api/data/subscribers.json (carpeta protegida por
  *  .htaccess; los navegadores NUNCA acceden a este archivo).
  *
@@ -11,13 +11,24 @@
  *
  *  POST (suscribir / cambiar preferencias)
  *    body: { endpoint, keys:{p256dh, auth}, prefs:{mode} }
- *      mode: "all"       → todos los programas
- *            "morning"   → solo mañana  (inicio 06:00–14:00)
- *            "afternoon" → solo tarde   (inicio 14:00–21:00)
- *            "day"       → todo el día  (inicio 06:00–21:00)
- *            "evening"   → alias legado (v0.1.4/v0.1.5) que se
- *                          guarda normalizado como "afternoon"
- *    resp: { ok:true, mode, total }
+ *      mode acepta UNA franja, varias separadas por coma o un array:
+ *        "noche"        → inicio del programa 22:00–04:59
+ *        "manana"       → inicio del programa 05:00–13:59
+ *        "tarde"        → inicio del programa 14:00–20:59
+ *        "all"          → todos los programas (excluyente)
+ *        "none"         → ninguno, solo anuncios manuales
+ *                         (excluyente)
+ *      Ejemplos: "noche,tarde", ["manana"], "all".
+ *      Se guarda normalizado como CSV canónico en "mode". Los modos
+ *      legados morning/afternoon/day (v0.1.6) y evening (v0.1.4/
+ *      v0.1.5) se siguen aceptando y se convierten a las franjas
+ *      nuevas al guardar.
+ *    resp: { ok:true, mode:"noche,tarde", total }
+ *
+ *  GET (leer las preferencias de UNA suscripción — lo usa la web
+ *  para prellenar el selector de «Cambiar franjas»)
+ *    query: ?endpoint=https://…
+ *    resp:  { ok:true, mode:"noche,tarde", total } · 404 si no existe
  *
  *  DELETE (baja — también la usa el botón «Silenciar avisos»
  *  dentro de la propia notificación, vía service worker)
@@ -33,8 +44,9 @@ require_once __DIR__ . '/push-lib.php';
 
 // ── Configuración ────────────────────────────────────────────
 
-// Modos válidos (PUSH_MODES) y ventanas horarias viven en
-// push-lib.php (las comparte con push-trigger.php).
+// Franjas válidas (PUSH_PREF_VALUES), ventanas horarias y
+// normalización multi-franja viven en push-lib.php (las comparte
+// con push-trigger.php).
 
 // Límite anti-abuso
 const MAX_SUBSCRIBERS = 2000;
@@ -75,16 +87,19 @@ function validateSubscriptionPayload(string $raw): array
         return [null, 'keys.auth inválido'];
     }
 
+    // v0.1.7: multi-franja. "mode" acepta un valor, CSV o array;
+    // se normaliza en ESTRICTO y se guarda como CSV canónico.
     $prefs = $data['prefs'] ?? [];
-    $mode  = pushNormalizeMode(is_array($prefs) ? (string)($prefs['mode'] ?? 'all') : 'all');
-    if (!in_array($mode, PUSH_MODES, true)) {
-        return [null, 'prefs.mode inválido (use all, morning, afternoon o day)'];
+    $modeRaw = is_array($prefs) ? ($prefs['mode'] ?? 'all') : 'all';
+    $norm = pushNormalizePrefs($modeRaw, true);
+    if (!$norm['ok']) {
+        return [null, $norm['error']];
     }
 
     $record = [
         'endpoint' => $endpoint,
         'keys'     => ['p256dh' => $p256dh, 'auth' => $auth],
-        'mode'     => $mode,   // ya normalizado (evening → afternoon)
+        'mode'     => pushPrefsToCsv($norm['prefs']),   // CSV canónico
     ];
 
     return [$record, null];
@@ -106,6 +121,37 @@ $rawBody = (string)file_get_contents('php://input');
 if (strlen($rawBody) > MAX_BODY_BYTES) {
     http_response_code(413);
     echo json_encode(['error' => 'cuerpo demasiado grande'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+// ── GET: preferencias de una suscripción (prellenar «Cambiar franjas») ──
+
+if ($method === 'GET') {
+    $endpoint = trim((string)($_GET['endpoint'] ?? ''));
+    if ($endpoint === '' || strlen($endpoint) > 1000 || !pushEndpointAllowed($endpoint)) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => 'endpoint requerido'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $list = pushReadSubscribers();
+    foreach ($list as $existing) {
+        if (!is_array($existing) || ($existing['endpoint'] ?? '') !== $endpoint) {
+            continue;
+        }
+        echo json_encode(
+            [
+                'ok' => true,
+                // Mismo camino de normalización que usa el trigger →
+                // el prellenado refleja el comportamiento real.
+                'mode' => pushPrefsToCsv(pushPrefsOfSubscriber($existing)),
+                'total' => count($list),
+            ],
+            JSON_UNESCAPED_UNICODE
+        );
+        exit;
+    }
+    http_response_code(404);
+    echo json_encode(['ok' => false, 'error' => 'suscripción no encontrada'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -199,5 +245,5 @@ if ($method === 'DELETE') {
 }
 
 http_response_code(405);
-header('Allow: POST, DELETE');
+header('Allow: GET, POST, DELETE');
 echo json_encode(['error' => 'método no permitido'], JSON_UNESCAPED_UNICODE);

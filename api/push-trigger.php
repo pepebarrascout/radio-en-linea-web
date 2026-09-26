@@ -20,10 +20,12 @@
  *     (TTL: 300 s); solo se re-intenta la ONDA COMPLETA si no
  *     llegó nada a nadie (máx. 3) para nunca duplicar avisos
  *   - suscripciones muertas (404/410) se limpian solas
- *   - preferencias por suscriptor (franja según la HORA DE INICIO
- *     del programa): "all" todos · "morning" 06:00–14:00 ·
- *     "afternoon" 14:00–21:00 · "day" 06:00–21:00; el modo legado
- *     "evening" se interpreta como "afternoon"
+ *   - preferencias por suscriptor (franjaS según la HORA DE INICIO
+ *     del programa, multi-selección v0.1.7): "noche" 22:00–05:00 ·
+ *     "manana" 05:00–14:00 · "tarde" 14:00–21:00 (combinables,
+ *     p. ej. "noche,tarde") · "all" todos · "none" ninguno (solo
+ *     anuncios manuales). Los modos legados morning/afternoon/day
+ *     (v0.1.6) y evening (v0.1.4/v0.1.5) se interpretan solos
  *
  *  Comandos CLI:
  *      php push-trigger.php                          → ciclo normal

@@ -15,7 +15,7 @@
 
 'use strict';
 
-var CACHE_NAME = 'qcr-static-v10';
+var CACHE_NAME = 'qcr-static-v11';
 
 var PRECACHE = [
   './',

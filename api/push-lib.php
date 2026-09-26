@@ -363,62 +363,198 @@ function pushHttpPost(string $url, array $headers, string $body, int $timeout = 
     return [$code, null];
 }
 
-// ── Preferencias de avisos (v0.1.6) ──────────────────────────
+// ── Preferencias de avisos (v0.1.7: multi-franja) ────────────
 //
-// El oyente elige una FRANJA horaria y solo recibe avisos de
-// programas que EMPIEZAN dentro de ella (hora de inicio, zona
-// horaria America/Guatemala):
+// El oyente elige una o VARIAS franjas y solo recibe avisos de
+// programas que EMPIEZAN dentro de alguna de ellas (hora de
+// inicio, zona horaria America/Guatemala):
 //
-//    all       → todos los programas (cualquier hora)
-//    morning   → solo mañana    06:00 ≤ inicio < 14:00
-//    afternoon → solo tarde     14:00 ≤ inicio < 21:00
-//    day       → todo el día    06:00 ≤ inicio < 21:00
+//    noche    → inicio entre 22:00 y 04:59 (cruza la medianoche)
+//    manana   → inicio entre 05:00 y 13:59
+//    tarde    → inicio entre 14:00 y 20:59
+//    all      → todos los programas (cualquier hora)
+//    none     → ninguno (solo anuncios manuales de la radio)
 //
-// Compatibilidad: las suscripciones hechas con v0.1.4/v0.1.5
-// guardaron el modo "evening" (inicio ≥ 14:00 sin tope). Se
-// sigue ACEPTANDO y se interpreta como "afternoon".
+// Nota: entre 21:00 y 21:59 no hay franja (solo "all" recibe los
+// avisos de programas que empiezan en esa hora).
+//
+// Almacenamiento: CSV canónico en el campo "mode" del suscriptor
+// ("noche,tarde", "manana,tarde", "all", "none", …). "all" y
+// "none" son EXCLUYENTES: nunca se combinan con franjas.
+//
+// Compatibilidad hacia atrás (sin reescribir subscribers.json),
+// resuelta al leer cada registro:
+//    "morning"   (v0.1.6) → manana
+//    "afternoon" (v0.1.6) → tarde
+//    "day"       (v0.1.6) → manana,tarde
+//    "evening"   (v0.1.4/v0.1.5) → tarde
+//    vacío o desconocido → all
 
-/** Modos válidos una vez normalizado el payload. */
-const PUSH_MODES = ['all', 'morning', 'afternoon', 'day'];
+/** Franjas horarias combinables (el orden define el CSV canónico). */
+const PUSH_SLOTS = ['noche', 'manana', 'tarde'];
 
-/** Inicio de la franja mañana (minutos desde medianoche, incluido). */
-const PUSH_MORNING_START = 6 * 60;   // 06:00
+/** Especiales excluyentes: nunca se combinan con franjas entre sí. */
+const PUSH_PREF_ALL = 'all';
+const PUSH_PREF_NONE = 'none';
 
-/** Fin de la franja mañana / inicio de la tarde (exclusivo). */
-const PUSH_MORNING_END = 14 * 60;    // 14:00
+/** Todos los valores válidos tras normalizar (para validar el POST). */
+const PUSH_PREF_VALUES = ['noche', 'manana', 'tarde', 'all', 'none'];
 
-/** Fin de la franja día/tarde (exclusivo). */
-const PUSH_DAY_END = 21 * 60;        // 21:00
+// Ventanas (minutos desde medianoche, sobre la HORA DE INICIO):
+const PUSH_NOCHE_START = 22 * 60;   // 22:00 → cubre [22:00, 24:00)
+const PUSH_MANANA_START = 5 * 60;   // 05:00 (inclusive)
+const PUSH_MANANA_END = 14 * 60;    // 14:00 (exclusivo) → fin de mañana
+const PUSH_TARDE_END = 21 * 60;     // 21:00 (exclusivo) → fin de tarde
 
 /**
- * Normaliza el modo recibido: minúsculas y alias legados.
- * "evening" (v0.1.4/v0.1.5) se convierte en "afternoon".
+ * Token → forma canónica: minúsculas, sin acentos y alias legados.
+ * Devuelve el token canónico o '' si no es reconocible.
  */
-function pushNormalizeMode(string $mode): string
+function pushCanonicalToken(string $token): string
 {
-    $mode = pushLower($mode);
-    return $mode === 'evening' ? 'afternoon' : $mode;
+    $token = pushLower($token);
+    if (function_exists('iconv')) {
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $token);
+        if ($ascii !== false && $ascii !== '') {
+            $token = $ascii;
+        }
+    }
+    $token = trim(preg_replace('/[^a-z0-9]+/', '', (string)$token));
+    switch ($token) {
+        case 'evening':    // legado v0.1.4/v0.1.5 ("tarde y noche")
+        case 'afternoon':  // legado v0.1.6
+            return 'tarde';
+        case 'morning':    // legado v0.1.6
+            return 'manana';
+        case 'day':        // legado v0.1.6 ("todo el día" → mañana+tarde)
+            return 'day';
+    }
+    return in_array($token, PUSH_PREF_VALUES, true) ? $token : '';
+}
+
+/**
+ * Normaliza las preferencias recibidas a la lista canónica.
+ *
+ * $raw acepta: string CSV ("noche,tarde"), valor único ("all") o
+ * array de strings (['noche','tarde']).
+ *
+ * $strict=true  (endpoint POST): token desconocido → error; vacío →
+ *                error. "all"+"none" a la vez → error.
+ * $strict=false (leer subscribers.json en el trigger): tokens
+ *                desconocidos se ignoran; vacío → ['all'].
+ *
+ * Exclusividad (ambos modos): si está "all" → solo ['all']; si está
+ * "none" → solo ['none'].
+ *
+ * Devuelve ['ok' => bool, 'prefs' => string[], 'error' => ?string].
+ */
+function pushNormalizePrefs($raw, bool $strict = false): array
+{
+    $tokens = [];
+    if (is_array($raw)) {
+        $tokens = $raw;
+    } elseif (is_string($raw)) {
+        $tokens = $raw === '' ? [] : explode(',', $raw);
+    }
+
+    $prefs = [];
+    foreach ($tokens as $token) {
+        $canonical = pushCanonicalToken((string)$token);
+        if ($canonical === '') {
+            if ($strict) {
+                return [
+                    'ok' => false,
+                    'prefs' => [],
+                    'error' => 'prefs.mode inválido (use noche, manana, tarde, all o none)',
+                ];
+            }
+            continue;   // modo tolerante: token raro se ignora
+        }
+        if ($canonical === 'day') {   // legado v0.1.6: día completo
+            $prefs[] = 'manana';
+            $prefs[] = 'tarde';
+            continue;
+        }
+        $prefs[] = $canonical;
+    }
+
+    // Exclusividad de los especiales (nunca conviven con franjas)
+    $hasAll = in_array(PUSH_PREF_ALL, $prefs, true);
+    $hasNone = in_array(PUSH_PREF_NONE, $prefs, true);
+    if ($strict && $hasAll && $hasNone) {
+        return [
+            'ok' => false,
+            'prefs' => [],
+            'error' => 'prefs.mode: "all" y "none" son excluyentes entre sí',
+        ];
+    }
+    if ($hasAll) {
+        $prefs = [PUSH_PREF_ALL];
+    } elseif ($hasNone) {
+        $prefs = [PUSH_PREF_NONE];
+    }
+
+    if ($strict && empty($prefs)) {
+        return ['ok' => false, 'prefs' => [], 'error' => 'prefs.mode vacío'];
+    }
+
+    // Deduplicación + orden canónico (noche, manana, tarde)
+    $prefs = array_values(array_unique($prefs));
+    $slots = array_values(array_intersect(PUSH_SLOTS, $prefs));
+    $specials = array_values(array_intersect([PUSH_PREF_ALL, PUSH_PREF_NONE], $prefs));
+
+    if (!$strict && empty($slots) && empty($specials)) {
+        return ['ok' => true, 'prefs' => [PUSH_PREF_ALL], 'error' => null];
+    }
+
+    return ['ok' => true, 'prefs' => array_merge($specials, $slots), 'error' => null];
+}
+
+/** Lista canónica de preferencias de un registro guardado (tolerante). */
+function pushPrefsOfSubscriber(array $subscriber): array
+{
+    $norm = pushNormalizePrefs($subscriber['mode'] ?? '', false);
+    return $norm['prefs'];
+}
+
+/** Lista canónica → CSV canónico para guardar en "mode". */
+function pushPrefsToCsv(array $prefs): string
+{
+    $norm = pushNormalizePrefs($prefs, false);
+    return implode(',', $norm['prefs']);
 }
 
 /**
  * ¿Este suscriptor debe recibir el aviso de este programa según
- * su preferencia? La ventana se evalúa sobre la HORA DE INICIO
- * del programa. Modos desconocidos se tratan como "all".
+ * sus preferencias? La ventana se evalúa sobre la HORA DE INICIO
+ * del programa. Registros raros/vacíos se tratan como "all".
  */
 function pushModeAllows(array $subscriber, int $startMin): bool
 {
-    $mode = pushNormalizeMode((string)($subscriber['mode'] ?? 'all'));
-    switch ($mode) {
-        case 'morning':
-            return $startMin >= PUSH_MORNING_START && $startMin < PUSH_MORNING_END;
-        case 'afternoon':
-            return $startMin >= PUSH_MORNING_END && $startMin < PUSH_DAY_END;
-        case 'day':
-            return $startMin >= PUSH_MORNING_START && $startMin < PUSH_DAY_END;
-        case 'all':
-        default:
-            return true;
+    $prefs = pushPrefsOfSubscriber($subscriber);
+
+    if (in_array(PUSH_PREF_NONE, $prefs, true)) {
+        return false;   // "Ninguno": silencia los recordatorios automáticos
     }
+    if (in_array(PUSH_PREF_ALL, $prefs, true)) {
+        return true;
+    }
+
+    foreach ($prefs as $slot) {
+        if ($slot === 'noche'
+            && ($startMin >= PUSH_NOCHE_START || $startMin < PUSH_MANANA_START)) {
+            return true;   // [22:00, 05:00) cruzando la medianoche
+        }
+        if ($slot === 'manana'
+            && $startMin >= PUSH_MANANA_START && $startMin < PUSH_MANANA_END) {
+            return true;   // [05:00, 14:00)
+        }
+        if ($slot === 'tarde'
+            && $startMin >= PUSH_MANANA_END && $startMin < PUSH_TARDE_END) {
+            return true;   // [14:00, 21:00)
+        }
+    }
+    return false;
 }
 
 // ── Almacén de suscriptores (compartido) ─────────────────────

@@ -191,29 +191,41 @@
             <button id="push-toggle" class="push-btn" type="button" aria-pressed="false">
               <i class="fas fa-bell mr-1 text-xs"></i><span id="push-toggle-text">Activar avisos de programas</span>
             </button>
+            <button id="push-edit" class="push-btn-ghost hidden" type="button">
+              <i class="fas fa-sliders-h mr-1 text-xs"></i>Cambiar franjas
+            </button>
             <div id="push-chooser" class="hidden push-chooser">
               <p class="text-xs text-subtle mb-2">
-                Te avisamos <strong>10 minutos antes</strong> de cada programa. ¿Cuáles quieres recibir?
+                Te avisamos <strong>10 minutos antes</strong> de cada programa.
+                Elige una o varias franjas (según la hora de inicio del programa):
               </p>
               <label class="push-option">
-                <input type="radio" name="qcr-push-mode" value="all" checked>
+                <input type="checkbox" name="qcr-push-slot" value="noche">
+                <span>Noche (22:00 a 05:00)</span>
+              </label>
+              <label class="push-option">
+                <input type="checkbox" name="qcr-push-slot" value="manana">
+                <span>Mañana (05:00 a 14:00)</span>
+              </label>
+              <label class="push-option">
+                <input type="checkbox" name="qcr-push-slot" value="tarde">
+                <span>Tarde (14:00 a 21:00)</span>
+              </label>
+              <label class="push-option">
+                <input type="checkbox" name="qcr-push-slot" value="all">
                 <span>Todos los programas</span>
               </label>
               <label class="push-option">
-                <input type="radio" name="qcr-push-mode" value="morning">
-                <span>Solo mañana (06:00 a 14:00)</span>
+                <input type="checkbox" name="qcr-push-slot" value="none">
+                <span>Ninguno (solo anuncios de la radio)</span>
               </label>
-              <label class="push-option">
-                <input type="radio" name="qcr-push-mode" value="afternoon">
-                <span>Solo tarde (14:00 a 21:00)</span>
-              </label>
-              <label class="push-option">
-                <input type="radio" name="qcr-push-mode" value="day">
-                <span>Todo el día (06:00 a 21:00)</span>
-              </label>
+              <p class="text-xs text-faint mt-2">
+                «Todos» y «Ninguno» no se combinan con las franjas. Con «Ninguno»
+                sigues recibiendo los anuncios que la radio envíe a mano.
+              </p>
               <div class="flex items-center gap-2 mt-3">
                 <button id="push-accept" class="push-btn push-btn-accept" type="button">
-                  <i class="fas fa-check mr-1 text-xs"></i>Activar
+                  <i class="fas fa-check mr-1 text-xs"></i><span id="push-accept-text">Activar</span>
                 </button>
                 <button id="push-cancel" class="push-btn-ghost" type="button">Cancelar</button>
               </div>

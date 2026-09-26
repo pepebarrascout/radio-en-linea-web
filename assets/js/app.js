@@ -755,6 +755,57 @@
   // play siguiente reconecta al borde del vivo.
   var audio = null;
 
+  // ── Resiliencia de reproducción (v0.1.7) ─────────────────────
+  // Chrome (Android) asigna el "foco de audio": cuando otra pestaña
+  // u otra app empieza a sonar, PAUSA la nuestra por su cuenta. Hay
+  // además interrupciones del sistema (llamadas, alarmas) y cortes
+  // de red que dejan el stream congelado. Estrategia:
+  //   1) Distinguir la pausa pedida por el oyente (botón de la web o
+  //      de la pantalla de bloqueo) de la pausa EXTERNA: userStopped.
+  //   2) Pausa externa → reconectar al vivo con reintentos y backoff
+  //      1s → 2s → 4s → 8s → 16s → 30s (6 intentos, ~61 s de
+  //      "cortesía": pasado ese margen dejamos de pelear el foco de
+  //      audio con lo que el oyente esté viendo en otro lado).
+  //   3) Tras agotar la cortesía, la reanudación espera señales del
+  //      oyente: volver a la pestaña, reabrir la PWA o tocar la
+  //      pantalla → reintento inmediato (sin límite de intentos).
+  //   4) Stream congelado por red (currentTime no avanza aunque el
+  //      elemento "suena") → vigilante cada 3 s; ~6 s congelados →
+  //      recarga del vivo (borde actual).
+  var userStopped = false;     // el oyente pidió DETENER explícitamente
+  var reconnecting = false;     // load() interno de una reconexión nuestra
+  var resumeTimer = null;
+  var resumeDelay = 1000;       // backoff: 1s → 2s → … → máx 30s
+  var resumeAttempts = 0;
+  var RESUME_MAX_ATTEMPTS = 6;  // 1+2+4+8+16+30 ≈ 61 s de cortesía
+  var stableTimer = null;
+  var stallTimer = null;
+  var stallLastTime = -1;
+  var stallFrozen = 0;
+
+  /** Programa un reintento de reconexión (backoff; force = sin tope). */
+  function scheduleResume(force) {
+    if (userStopped) return;
+    if (!force && resumeAttempts >= RESUME_MAX_ATTEMPTS) return;
+    clearTimeout(resumeTimer);
+    if (force) resumeAttempts = 0;   // el oyente está presente: ciclo nuevo
+    resumeTimer = setTimeout(function () {
+      if (userStopped) return;
+      resumeAttempts += 1;
+      startStream(true);
+    }, resumeDelay);
+  }
+
+  /** Detención REAL del stream por decisión del oyente
+   *  (botón de la web o "pausa" en la pantalla de bloqueo). */
+  function stopByUser() {
+    userStopped = true;
+    clearTimeout(resumeTimer);
+    if (audio) stopStream();
+    state.isPlaying = false;
+    updatePlayButton();
+  }
+
   /** Detención real: corta la descarga y libera el búfer. */
   function stopStream() {
     try {
@@ -764,31 +815,82 @@
     } catch (e) { /* el elemento ya estaba vacío */ }
   }
 
-  /** Conecta (o reconecta) al borde del vivo y reproduce. */
-  function startStream() {
+  /** Conecta (o reconecta) al borde del vivo y reproduce.
+   *  isAutoResume: true en reintentos automáticos (foco de audio
+   *  perdido, interrupciones, stream congelado). */
+  function startStream(isAutoResume) {
+    if (!audio) return;
+    // El load() de abajo dispara un evento 'pause' interno: marcarlo
+    // para que el handler de pausa no lo confunda con una pausa
+    // externa ni programe reintentos duplicados.
+    reconnecting = true;
     // Cache-buster: garantiza una conexión nueva al punto en vivo
     var sep = RADIO_STREAM_URL.indexOf('?') >= 0 ? '&' : '?';
     audio.src = RADIO_STREAM_URL + sep + 't=' + Date.now();
     audio.load();
     audio.play().then(function () {
+      reconnecting = false;
       state.isPlaying = true;
       updatePlayButton();
     }).catch(function (err) {
+      reconnecting = false;
       console.error('Error reproduciendo:', err);
       state.isPlaying = false;
       updatePlayButton();
+      // Reintento automático: continuar el backoff. Si el navegador
+      // exige un gesto (NotAllowedError, típico de iOS), los
+      // reintentos por timer no servirán → esperar señales del
+      // oyente (volver a la pestaña / tocar la pantalla).
+      if (isAutoResume && !userStopped
+          && (!err || err.name !== 'NotAllowedError')) {
+        scheduleResume(false);
+      }
     });
   }
 
   function togglePlay() {
     if (!audio) return;
     if (state.isPlaying) {
-      stopStream();
-      state.isPlaying = false;
+      stopByUser();
     } else {
-      startStream();
+      userStopped = false;
+      resumeAttempts = 0;
+      resumeDelay = 1000;
+      startStream(false);
     }
     updatePlayButton();
+  }
+
+  /**
+   * Vigilante de stream congelado (v0.1.7). Cuando la red se corta
+   * (cambio WiFi↔datos, ahorro de energía del móvil), el elemento
+   * puede QUEDARSE "sonando" sin que llegue ni un byte: no hay evento
+   * 'pause' ni 'stalled' fiable en todos los navegadores. Cada 3 s
+   * compara currentTime; si lleva ~6 s congelado mientras debería
+   * sonar, recarga el vivo (reconexión al borde actual).
+   */
+  function installStallWatchdog() {
+    if (stallTimer) return;
+    stallTimer = setInterval(function () {
+      if (!audio || audio.paused || userStopped) {
+        stallFrozen = 0;
+        stallLastTime = -1;
+        return;
+      }
+      var t = audio.currentTime;
+      if (stallLastTime >= 0 && t === stallLastTime) {
+        stallFrozen += 1;
+        if (stallFrozen >= 2) {   // 2 chequeos × 3 s ≈ 6 s congelado
+          stallFrozen = 0;
+          stallLastTime = -1;
+          startStream(true);      // recarga el vivo
+          return;
+        }
+      } else {
+        stallFrozen = 0;
+      }
+      stallLastTime = t;
+    }, 3000);
   }
 
   function updatePlayButton() {
@@ -871,10 +973,56 @@
       castVote(artist, title, action, btn.getAttribute('data-itemid') || '');
     });
 
-    // Audio
+    // Audio (resiliencia v0.1.7: pausa externa ≠ pausa del oyente)
     if (audio) {
-      audio.addEventListener('pause', function () { state.isPlaying = false; updatePlayButton(); });
-      audio.addEventListener('playing', function () { state.isPlaying = true; updatePlayButton(); });
+      audio.addEventListener('playing', function () {
+        reconnecting = false;
+        state.isPlaying = true;
+        updatePlayButton();
+        // Suena de nuevo: el backoff vuelve a empezar. Si la
+        // reproducción se mantiene estable ~90 s, el contador de
+        // intentos se reinicia (la siguiente interrupción tendrá
+        // otra vez los 6 reintentos de cortesía).
+        resumeDelay = 1000;
+        clearTimeout(stableTimer);
+        stableTimer = setTimeout(function () {
+          if (audio && !audio.paused) resumeAttempts = 0;
+        }, 90000);
+      });
+      audio.addEventListener('pause', function () {
+        clearTimeout(stableTimer);
+        // El oyente pulsó DETENER (web o pantalla de bloqueo)
+        if (userStopped) {
+          state.isPlaying = false;
+          updatePlayButton();
+          return;
+        }
+        // load() interno de una reconexión nuestra: no es una pausa
+        // externa ni hay que programar reintentos.
+        if (reconnecting) return;
+        // PAUSA EXTERNA: Chrome nos quitó el foco de audio (otra
+        // pestaña/app empezó a sonar), interrupción del sistema, etc.
+        // El botón sigue en estado "sonando" porque la intención del
+        // oyente no cambió: la reanudación es automática.
+        scheduleResume(false);
+      });
+
+      // Señales del oyente para reanudar tras pausas largas (o tras
+      // agotarse la cortesía de reintentos por timer): volver a la
+      // pestaña, reabrir la PWA o tocar la pantalla.
+      var tryResumeOnSignal = function () {
+        if (userStopped || !audio || !audio.paused) return;
+        // Solo si hay intención de escuchar: venía sonando (isPlaying
+        // sigue true durante una pausa externa) o quedó a la espera de
+        // un reintento. Nunca arrancar la radio por nuestra cuenta.
+        if (!state.isPlaying && resumeAttempts === 0) return;
+        scheduleResume(true);
+      };
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) tryResumeOnSignal();
+      });
+      window.addEventListener('pageshow', tryResumeOnSignal);
+      document.addEventListener('pointerdown', tryResumeOnSignal);
     }
 
     // Rotación o cambio de ancho (p. ej. la barra de URL del móvil):
@@ -915,21 +1063,89 @@
     });
   }
 
-  // ── Avisos push de programas (v0.1.6, opt-in voluntario) ──
+  // ── Avisos push de programas (v0.1.7, opt-in voluntario) ──
   // Anti-spam por diseño: nada de popups ni permisos en la primera
   // visita — el botón vive en el panel de Programación, el oyente
-  // elige su franja (todos · mañana 06–14 · tarde 14–21 · día 06–21),
-  // puede desactivarse con un toque (aquí o en la propia notificación)
-  // y si el oyente ya está escuchando, el aviso se silencia solo.
+  // elige UNA o VARIAS franjas (noche 22–05 · mañana 05–14 · tarde
+  // 14–21 · todos · ninguno), puede cambiarlas sin darse de baja
+  // («Cambiar franjas»), desactivarlas con un toque (aquí o en la
+  // propia notificación) y si ya está escuchando, el aviso se
+  // silencia solo.
   var pushVapidKey = '';
 
-  // Texto de cada franja para el mensaje de confirmación
-  var PUSH_MODE_LABELS = {
+  // Texto humano de cada preferencia (para la confirmación)
+  var PUSH_PREF_LABELS = {
+    noche: 'noche (22:00 a 05:00)',
+    manana: 'mañana (05:00 a 14:00)',
+    tarde: 'tarde (14:00 a 21:00)',
     all: 'todos los programas',
-    morning: 'solo mañana (06:00 a 14:00)',
-    afternoon: 'solo tarde (14:00 a 21:00)',
-    day: 'todo el día (06:00 a 21:00)',
+    none: 'ninguno (solo anuncios de la radio)',
   };
+
+  /** Casillas marcadas en el selector → ['noche','tarde', …]. */
+  function pushCheckedPrefs() {
+    var boxes = document.querySelectorAll('input[name="qcr-push-slot"]:checked');
+    var prefs = [];
+    for (var i = 0; i < boxes.length; i += 1) prefs.push(boxes[i].value);
+    return prefs;
+  }
+
+  /** Marca el selector con la lista dada (CSV de la suscripción). */
+  function setChooserPrefs(prefs) {
+    var boxes = document.querySelectorAll('input[name="qcr-push-slot"]');
+    Array.prototype.forEach.call(boxes, function (box) {
+      box.checked = prefs.indexOf(box.value) >= 0;
+    });
+    var accept = $('push-accept');
+    if (accept) {
+      if (prefs.length) accept.removeAttribute('disabled');
+      else accept.setAttribute('disabled', 'disabled');
+    }
+  }
+
+  /** Lista ['noche','tarde'] → "noche y tarde" (para el mensaje). */
+  function pushPrefsLabel(prefs) {
+    if (!prefs || !prefs.length) return '';
+    var names = [];
+    for (var i = 0; i < prefs.length; i += 1) {
+      names.push(PUSH_PREF_LABELS[prefs[i]] || prefs[i]);
+    }
+    if (prefs.length === 1) return names[0];
+    if (prefs.length === 2) return names[0] + ' y ' + names[1];
+    return names.slice(0, -1).join(', ') + ' y ' + names[names.length - 1];
+  }
+
+  /**
+   * Exclusividad del selector (v0.1.7):
+   *  - marcar «Todos» o «Ninguno» desmarca y anula las otras casillas;
+   *  - marcar cualquier franja desmarca «Todos» y «Ninguno»;
+   *  - «Activar» queda deshabilitado si no hay nada marcado.
+   */
+  function bindPushChooserLogic() {
+    var chooser = $('push-chooser');
+    if (!chooser) return;
+    chooser.addEventListener('change', function (e) {
+      var input = e.target;
+      if (!input || input.name !== 'qcr-push-slot') return;
+      var boxes = document.querySelectorAll('input[name="qcr-push-slot"]');
+      if (input.checked && (input.value === 'all' || input.value === 'none')) {
+        Array.prototype.forEach.call(boxes, function (box) {
+          if (box !== input) box.checked = false;
+        });
+      } else if (input.checked) {
+        Array.prototype.forEach.call(boxes, function (box) {
+          if (box !== input && (box.value === 'all' || box.value === 'none')) {
+            box.checked = false;
+          }
+        });
+      }
+      var accept = $('push-accept');
+      if (accept) {
+        if (pushCheckedPrefs().length) accept.removeAttribute('disabled');
+        else accept.setAttribute('disabled', 'disabled');
+      }
+    });
+  }
 
   function pushSupported() {
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
@@ -977,12 +1193,15 @@
       return registration.pushManager.getSubscription();
     }).then(function (subscription) {
       if (chooser) chooser.classList.add('hidden');
+      var editBtn = $('push-edit');
 
       if (subscription) {
         updatePushToggle('Avisos activados — tocar para desactivar', true, false);
+        if (editBtn) editBtn.classList.remove('hidden');
         if (!keepHint) pushHint('');
         return;
       }
+      if (editBtn) editBtn.classList.add('hidden');
       if (Notification.permission === 'denied') {
         updatePushToggle('Avisos bloqueados en el navegador', false, false);
         return;
@@ -1012,8 +1231,12 @@
     });
   }
 
-  /** Suscribe con el modo elegido y guarda las preferencias. */
-  function subscribePush(mode) {
+  /** ¿El selector está abierto en modo edición (suscripción activa)? */
+  var pushEditMode = false;
+
+  /** Suscribe (o actualiza) con las franjas elegidas.
+   *  prefs: array de valores ['noche','tarde',…] o ['all'] / ['none']. */
+  function subscribePush(prefs) {
     var accept = $('push-accept');
     if (accept) accept.setAttribute('disabled', 'disabled');
 
@@ -1046,7 +1269,7 @@
             body: JSON.stringify({
               endpoint: subscription.endpoint,
               keys: json.keys || {},
-              prefs: { mode: mode },
+              prefs: { mode: prefs.join(',') },   // v0.1.7: CSV multi-franja
             }),
           }).then(function (resp) {
             // v0.1.6: el POST ya no se da por bueno sin mirar la
@@ -1060,10 +1283,16 @@
         }).then(function (data) {
           refreshPushUi(true);
           if (data && data.ok) {
-            pushHint('Avisos activados: ' + (PUSH_MODE_LABELS[mode] || mode) + '.');
+            var label = pushPrefsLabel(prefs) || 'todos los programas';
+            pushHint(
+              (pushEditMode ? 'Franjas guardadas: ' : 'Avisos activados: ')
+              + label + '.'
+            );
           } else {
             pushHint('');
           }
+          pushEditMode = false;
+          setAcceptText('Activar');
         });
       });
     }).catch(function (err) {
@@ -1083,6 +1312,12 @@
     }).then(function () {
       if (accept) accept.removeAttribute('disabled');
     });
+  }
+
+  /** Texto del botón Activar/Guardar (conserva el icono). */
+  function setAcceptText(text) {
+    var el = $('push-accept-text');
+    if (el) el.textContent = text;
   }
 
   function bindPush() {
@@ -1120,6 +1355,10 @@
             pushHint('Los avisos están bloqueados: desbloquéalos en el candado/icono del sitio.');
             return;
           }
+          // Selector en modo alta: por defecto «Todos los programas»
+          pushEditMode = false;
+          setAcceptText('Activar');
+          setChooserPrefs(['all']);
           if (chooser) chooser.classList.toggle('hidden');
         }).catch(function (err) {
           console.error('Error consultando suscripción:', err);
@@ -1127,15 +1366,56 @@
       });
     }
 
+    // «Cambiar franjas»: prellenar con lo guardado en el servidor
+    // y abrir el selector SIN darse de baja (el POST actualiza).
+    var editBtn = $('push-edit');
+    if (editBtn) {
+      editBtn.addEventListener('click', function () {
+        if (!chooser || !chooser.classList.contains('hidden')) {
+          if (chooser) chooser.classList.add('hidden');
+          return;
+        }
+        pushEditMode = true;
+        setAcceptText('Guardar');
+        setChooserPrefs(['all']);   // fallback mientras se consulta
+        if (chooser) chooser.classList.remove('hidden');
+        navigator.serviceWorker.ready.then(function (registration) {
+          return registration.pushManager.getSubscription();
+        }).then(function (subscription) {
+          if (!subscription) return null;
+          return fetch(
+            PUSH_SUBSCRIBE_URL + '?endpoint=' + encodeURIComponent(subscription.endpoint),
+            { cache: 'no-store' }
+          ).then(function (r) {
+            if (!r.ok) throw new Error('push GET HTTP ' + r.status);
+            return r.json();
+          });
+        }).then(function (data) {
+          if (!chooser || chooser.classList.contains('hidden')) return;   // ya cerrado
+          if (data && data.ok && data.mode) {
+            setChooserPrefs(String(data.mode).split(','));
+          }
+        }).catch(function () {
+          /* el fallback ['all'] ya está pintado */
+        });
+      });
+    }
+
+    // Exclusividad «Todos»/«Ninguno» y estado del botón
+    bindPushChooserLogic();
+
     if (accept) {
       accept.addEventListener('click', function () {
-        var checked = document.querySelector('input[name="qcr-push-mode"]:checked');
-        subscribePush(checked ? checked.value : 'all');
+        var prefs = pushCheckedPrefs();
+        if (!prefs.length) return;   // nada marcado (botón deshabilitado)
+        subscribePush(prefs);
       });
     }
     if (cancel && chooser) {
       cancel.addEventListener('click', function () {
         chooser.classList.add('hidden');
+        pushEditMode = false;
+        setAcceptText('Activar');
         pushHint('');
       });
     }
@@ -1269,10 +1549,21 @@
     // vivo; "pausa" detiene de verdad la descarga del stream).
     if ('mediaSession' in navigator) {
       try {
-        navigator.mediaSession.setActionHandler('play', function () { startStream(); });
-        navigator.mediaSession.setActionHandler('pause', function () { stopStream(); });
+        navigator.mediaSession.setActionHandler('play', function () {
+          if (state.isPlaying) return;   // el SO repite la acción: no reconectar
+          userStopped = false;
+          resumeAttempts = 0;
+          resumeDelay = 1000;
+          startStream(false);
+        });
+        navigator.mediaSession.setActionHandler('pause', function () {
+          stopByUser();   // pausa desde la pantalla de bloqueo = decisión del oyente
+        });
       } catch (e) { /* navegador sin acciones multimedia */ }
     }
+
+    // v0.1.7: vigilante de stream congelado (una sola instancia)
+    installStallWatchdog();
 
     applyTheme();
     loadMyVotesLocal();   // marca "ya voté" visible desde el primer render
